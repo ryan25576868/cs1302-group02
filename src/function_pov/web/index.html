@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101114">
+    <title>Function POV — Code Atlas</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Function POV home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32"><path d="M8 8h7m2 0h7M8 8v16m0-8h8m0 0v8m0-8h8" /><circle cx="8" cy="8" r="2.5"/><circle cx="24" cy="8" r="2.5"/><circle cx="8" cy="24" r="2.5"/><circle cx="16" cy="16" r="2.5"/><circle cx="16" cy="24" r="2.5"/><circle cx="24" cy="16" r="2.5"/></svg>
+          </span>
+          <span class="brand-copy"><strong>function<span class="brand-accent">pov</span></strong><small>CODE ATLAS</small></span>
+        </a>
+        <div class="topbar-meta"><span class="local-indicator"></span> LOCAL ANALYSIS <span class="meta-divider"></span> AST ENGINE</div>
+        <div class="topbar-actions">
+          <button class="button button-secondary" id="open-files-top" type="button">Files</button>
+          <button class="button button-primary topbar-open" id="open-project-top" type="button">
+            <span aria-hidden="true">＋</span> Open folder
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="graph-panel panel" aria-labelledby="graph-heading">
+          <div class="panel-heading graph-heading">
+            <div>
+              <p class="eyebrow">PROJECT OVERVIEW</p>
+              <h1 id="graph-heading">Function map</h1>
+              <p class="subheading" id="project-label">Choose a Python project to explore its structure.</p>
+            </div>
+            <div class="graph-actions">
+              <button class="icon-button" id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+              <button class="zoom-level" id="zoom-label" type="button" aria-label="Reset zoom">100%</button>
+              <button class="icon-button" id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">＋</button>
+              <span class="action-divider"></span>
+              <button class="icon-button reset-button" id="reset-view" type="button" aria-label="Reset view" title="Reset view">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.3 8a7 7 0 1 1-.1 4M3 4v4h4"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="graph-stage" id="graph-stage">
+            <svg id="function-graph" class="function-graph" viewBox="0 0 1000 680" preserveAspectRatio="none" role="img" aria-label="Interactive function call graph">
+              <defs>
+                <pattern id="dot-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                  <circle cx="1" cy="1" r="1" fill="#34363d" />
+                </pattern>
+                <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L8,4 L0,8 z" fill="#555a65" />
+                </marker>
+                <marker id="arrow-active" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L8,4 L0,8 z" fill="#8f80ff" />
+                </marker>
+              </defs>
+              <rect class="graph-background" width="1000" height="680" fill="url(#dot-grid)"></rect>
+              <g id="graph-content"></g>
+            </svg>
+            <div class="graph-empty" id="graph-empty">
+              <div class="empty-art" aria-hidden="true"><span></span><i></i><b></b></div>
+              <p class="empty-title">Your code, mapped.</p>
+              <p class="empty-copy">Open a Python folder or choose individual files to see how your functions connect.</p>
+              <button class="button button-primary" id="open-project-empty" type="button">Choose a folder</button>
+              <button class="text-button" id="open-files-empty" type="button">or select individual .py files</button>
+              <span class="empty-footnote">Source is analyzed locally and never executed.</span>
+            </div>
+            <div class="graph-loading" id="graph-loading" aria-live="polite">
+              <span class="spinner"></span><span>Mapping your functions…</span>
+            </div>
+            <div class="analysis-notices" id="analysis-notices" aria-live="polite" hidden></div>
+            <div class="graph-legend" id="graph-legend" hidden>
+              <span class="legend-dot"></span><span>Function</span>
+              <span class="legend-line"></span><span>Calls</span>
+            </div>
+            <div class="graph-hint" id="graph-hint" hidden>DRAG TO MOVE <span>·</span> SCROLL TO ZOOM <span>·</span> DRAG CANVAS TO PAN</div>
+          </div>
+          <div class="graph-footer">
+            <span id="graph-count">No project loaded</span>
+            <span class="safe-note"><span class="safe-icon">✓</span> Static analysis · No code execution</span>
+          </div>
+        </section>
+
+        <aside class="details-panel panel" aria-labelledby="details-heading">
+          <div class="details-empty" id="details-empty">
+            <span class="detail-empty-icon" aria-hidden="true">⌘</span>
+            <p class="empty-title">Nothing selected</p>
+            <p class="empty-copy">Select a function in the map to inspect its source, signature, and connections.</p>
+          </div>
+          <div class="details-content" id="details-content" hidden>
+            <div class="panel-heading detail-heading">
+              <div>
+                <p class="eyebrow">FUNCTION DETAILS</p>
+                <h2 id="details-heading">Function</h2>
+                <p class="detail-location" id="detail-location"></p>
+              </div>
+              <button class="button button-pov" type="button" disabled title="Function POV is coming in a later stage">
+                <span aria-hidden="true">✦</span> Enter POV <span class="soon">SOON</span>
+              </button>
+            </div>
+            <div class="detail-scroll">
+              <section class="detail-section">
+                <div class="section-title"><span>01</span> PARAMETERS <span class="section-count" id="parameter-count">0</span></div>
+                <div class="parameter-list" id="parameter-list"></div>
+              </section>
+              <section class="detail-section">
+                <div class="section-title"><span>02</span> SOURCE CODE</div>
+                <div class="code-window">
+                  <div class="code-toolbar"><span class="code-dot"></span><span id="code-file"></span><span class="code-language">PY</span></div>
+                  <pre class="source-code"><code id="source-code"></code></pre>
+                </div>
+              </section>
+              <section class="detail-section">
+                <div class="section-title"><span>03</span> RETURNS</div>
+                <div class="return-list" id="return-list"></div>
+              </section>
+              <section class="detail-section connections-section">
+                <div class="section-title"><span>04</span> CONNECTIONS</div>
+                <div class="connection-group"><span class="connection-label">CALLS</span><div id="calls-list"></div></div>
+                <div class="connection-group"><span class="connection-label">CALLED BY</span><div id="called-by-list"></div></div>
+              </section>
+              <div class="detail-notice" id="diagnostics-notice" hidden></div>
+            </div>
+          </div>
+        </aside>
+      </main>
+      <footer class="statusbar">
+        <div class="status-left"><span class="status-dot"></span><span id="status-message">Ready when you are</span></div>
+        <span class="status-right">FUNCTION POV <span>·</span> LOCAL WORKSPACE</span>
+      </footer>
+    </div>
+    <input id="folder-input" type="file" webkitdirectory directory multiple hidden>
+    <input id="files-input" type="file" accept=".py,text/x-python" multiple hidden>
+    <div class="toast" id="toast" role="alert" aria-live="assertive"></div>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
