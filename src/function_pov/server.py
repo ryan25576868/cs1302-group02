@@ -2,6 +2,9 @@
 
 import json
 import tempfile
+import threading
+import uuid
+from collections import OrderedDict
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
@@ -10,12 +13,17 @@ from urllib.parse import urlsplit
 
 from .analyzer import analyze_project
 from .graph import build_function_graph
+from .pov.engine import PovSimulation, SimulationError, build_simulation
 
 MAX_FILES = 400
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_TOTAL_SOURCE_BYTES = 8 * 1024 * 1024
 MAX_REQUEST_BYTES = 20 * 1024 * 1024
 WEB_ROOT = Path(__file__).parent / "web"
+POV_SESSIONS: "OrderedDict[str, PovSimulation]" = OrderedDict()
+POV_SESSIONS_LOCK = threading.Lock()
+MAX_POV_SESSIONS = 64
+INVALID_JSON_BODY = object()
 
 
 class FunctionPovRequestHandler(BaseHTTPRequestHandler):
@@ -52,27 +60,59 @@ class FunctionPovRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
     def do_POST(self) -> None:
-        if urlsplit(self.path).path != "/api/analyze":
+        route = urlsplit(self.path).path
+        allowed_routes = {
+            "/api/analyze",
+            "/api/pov/start",
+            "/api/pov/check",
+            "/api/pov/hint",
+            "/api/pov/answer",
+        }
+        if route not in allowed_routes:
             self._send_json(404, {"error": "Not found"})
             return
 
-        content_length = self.headers.get("Content-Length")
-        try:
-            length = int(content_length) if content_length is not None else -1
-        except ValueError:
-            length = -1
-        if length < 0:
-            self._send_json(400, {"error": "A valid Content-Length header is required."})
+        if route == "/api/pov/check":
+            self._handle_pov_action("check")
             return
-        if length > MAX_REQUEST_BYTES:
-            self._send_json(413, {"error": "The upload request is too large (20 MB maximum)."})
+        if route == "/api/pov/hint":
+            self._handle_pov_action("hint")
+            return
+        if route == "/api/pov/answer":
+            self._handle_pov_action("answer")
             return
 
+        payload = self._read_json_body()
+        if payload is INVALID_JSON_BODY:
+            return
         try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
             files = _validate_files(payload)
-        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        except ValueError as error:
             self._send_json(400, {"error": str(error)})
+            return
+
+        if route == "/api/pov/start":
+            function_id = payload.get("function_id") if isinstance(payload, dict) else None
+            arguments = payload.get("arguments", {}) if isinstance(payload, dict) else {}
+            if not isinstance(function_id, str) or not isinstance(arguments, dict):
+                self._send_json(
+                    400,
+                    {"error": 'POV start requires a "function_id" and an "arguments" object.'},
+                )
+                return
+            try:
+                simulation = _build_uploaded_simulation(files, function_id, arguments)
+            except (OSError, ValueError, SimulationError) as error:
+                self._send_json(400, {"error": str(error)})
+                return
+            session_id = str(uuid.uuid4())
+            with POV_SESSIONS_LOCK:
+                POV_SESSIONS[session_id] = simulation
+                while len(POV_SESSIONS) > MAX_POV_SESSIONS:
+                    POV_SESSIONS.popitem(last=False)
+            response = simulation.public_dict()
+            response["session_id"] = session_id
+            self._send_json(200, response)
             return
 
         try:
@@ -90,6 +130,60 @@ class FunctionPovRequestHandler(BaseHTTPRequestHandler):
                 "diagnostics": [asdict(diagnostic) for diagnostic in result.diagnostics],
             },
         )
+
+    def _read_json_body(self) -> object:
+        content_length = self.headers.get("Content-Length")
+        try:
+            length = int(content_length) if content_length is not None else -1
+        except ValueError:
+            length = -1
+        if length < 0:
+            self._send_json(400, {"error": "A valid Content-Length header is required."})
+            return INVALID_JSON_BODY
+        if length > MAX_REQUEST_BYTES:
+            self._send_json(413, {"error": "The upload request is too large (20 MB maximum)."})
+            return INVALID_JSON_BODY
+        try:
+            return json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json(400, {"error": "Request body must be valid UTF-8 JSON."})
+            return None
+
+    def _handle_pov_action(self, action: str) -> None:
+        payload = self._read_json_body()
+        if payload is INVALID_JSON_BODY:
+            return
+        if not isinstance(payload, dict):
+            self._send_json(400, {"error": "Request body must be a JSON object."})
+            return
+        session_id = payload.get("session_id")
+        index = payload.get("step")
+        if (
+            not isinstance(session_id, str)
+            or not isinstance(index, int)
+            or isinstance(index, bool)
+        ):
+            self._send_json(400, {"error": "A POV session and step number are required."})
+            return
+        with POV_SESSIONS_LOCK:
+            simulation = POV_SESSIONS.get(session_id)
+        if simulation is None:
+            self._send_json(404, {"error": "This POV session has expired. Enter POV again."})
+            return
+        try:
+            if action == "check":
+                result = simulation.check(index, payload.get("answer"))
+            elif action == "hint":
+                result = {"hint": simulation.hint(index)}
+            else:
+                result = {
+                    "answer": simulation.answer(index),
+                    "feedback": "Here is the answer. You can continue learning.",
+                }
+        except SimulationError as error:
+            self._send_json(400, {"error": str(error)})
+            return
+        self._send_json(200, result)
 
     def _send_json(self, status: int, payload: Dict[str, object]) -> None:
         content = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -154,6 +248,22 @@ def _analyze_uploaded_files(files: List[Tuple[str, str]]):
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(source, encoding="utf-8")
         return analyze_project(str(root))
+
+
+def _build_uploaded_simulation(
+    files: List[Tuple[str, str]],
+    function_id: str,
+    arguments: Dict[str, object],
+) -> PovSimulation:
+    with tempfile.TemporaryDirectory(prefix="function-pov-") as directory:
+        root = Path(directory).resolve()
+        for relative_name, source in files:
+            destination = (root / relative_name).resolve()
+            if not destination.is_relative_to(root):
+                raise ValueError("A file path is outside the temporary project directory.")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(source, encoding="utf-8")
+        return build_simulation(str(root), function_id, arguments)
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:

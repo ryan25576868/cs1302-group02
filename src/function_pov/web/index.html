@@ -96,8 +96,8 @@
                 <h2 id="details-heading">Function</h2>
                 <p class="detail-location" id="detail-location"></p>
               </div>
-              <button class="button button-pov" type="button" disabled title="Function POV is coming in a later stage">
-                <span aria-hidden="true">✦</span> Enter POV <span class="soon">SOON</span>
+              <button class="button button-pov" id="enter-pov" type="button">
+                <span aria-hidden="true">✦</span> Be the function
               </button>
             </div>
             <div class="detail-scroll">
@@ -131,6 +131,68 @@
         <span class="status-right">FUNCTION POV <span>·</span> LOCAL WORKSPACE</span>
       </footer>
     </div>
+    <div class="pov-launcher" id="pov-launcher" hidden>
+      <form class="launch-card" id="pov-launch-form">
+        <button class="icon-button launch-close" id="pov-launch-close" type="button" aria-label="Close">×</button>
+        <p class="eyebrow">YOUR FUNCTION IS WAITING</p>
+        <h2 id="pov-launch-title">Enter function</h2>
+        <p class="launch-description">Choose the values sent by the caller. Use JSON values such as <code>4</code>, <code>true</code>, or <code>"hello"</code>.</p>
+        <div class="launch-arguments" id="launch-arguments"></div>
+        <p class="launch-error" id="launch-error" role="alert" hidden></p>
+        <div class="launch-actions">
+          <button class="button button-secondary" id="pov-launch-cancel" type="button">Cancel</button>
+          <button class="button button-primary" type="submit"><span aria-hidden="true">✦</span> Enter POV</button>
+        </div>
+      </form>
+    </div>
+    <section class="pov-overlay" id="pov-overlay" aria-label="Function POV simulation" hidden>
+      <header class="pov-topbar">
+        <button class="pov-back" id="pov-back" type="button"><span aria-hidden="true">←</span> Back to map</button>
+        <div class="pov-mode"><span class="pov-mode-star">✦</span><span>FUNCTION POV</span><span class="pov-simulation-label">SIMPLIFIED SIMULATION</span></div>
+        <button class="pov-restart-top" id="pov-restart-top" type="button">↻ <span>Restart</span></button>
+      </header>
+      <div class="pov-progress-wrap">
+        <div class="pov-progress-meta"><span id="pov-progress-label">STEP 1 OF 1</span><span id="pov-progress-function"></span></div>
+        <div class="pov-progress-track"><span id="pov-progress-bar"></span></div>
+      </div>
+      <main class="pov-main">
+        <section class="pov-stage-column">
+          <div class="pov-stack-card">
+            <div class="pov-card-label"><span class="stack-glyph">▤</span> CALL STACK</div>
+            <div class="pov-stack" id="pov-stack"></div>
+          </div>
+          <div class="pov-code-card">
+            <div class="pov-card-label"><span class="code-glyph">⌘</span> YOUR FUNCTION <span class="pov-code-file" id="pov-code-file"></span></div>
+            <pre class="pov-source" id="pov-source"></pre>
+          </div>
+          <div class="pov-locals-card">
+            <div class="pov-card-label"><span class="locals-glyph">◈</span> LOCAL VARIABLES <span class="pov-local-function" id="pov-local-function"></span></div>
+            <div class="pov-locals" id="pov-locals"></div>
+          </div>
+        </section>
+        <section class="pov-action-column">
+          <div class="pov-step-heading"><span class="pov-step-icon" id="pov-step-icon">✦</span><span class="pov-step-type" id="pov-step-type">FUNCTION ENTRY</span></div>
+          <h1 class="pov-prompt" id="pov-prompt"></h1>
+          <p class="pov-expression" id="pov-expression"></p>
+          <div class="pov-arguments-tokens" id="pov-argument-tokens"></div>
+          <div class="pov-challenge" id="pov-challenge"></div>
+          <div class="pov-feedback" id="pov-feedback" aria-live="polite" hidden></div>
+          <div class="pov-learning-note"><span>✦</span><span>You're following a safe, simplified simulation of this function — Python code is never executed.</span></div>
+        </section>
+      </main>
+      <footer class="pov-controls">
+        <div class="pov-control-left">
+          <button class="pov-control-button" id="pov-previous" type="button">← Previous</button>
+          <button class="pov-control-button" id="pov-restart" type="button">↻ Restart</button>
+        </div>
+        <div class="pov-control-right">
+          <button class="pov-control-button pov-hint-button" id="pov-hint" type="button">✧ Hint</button>
+          <button class="pov-control-button pov-answer-button" id="pov-answer" type="button">Show answer</button>
+          <button class="button button-primary pov-next-button" id="pov-next" type="button">Next <span aria-hidden="true">→</span></button>
+        </div>
+      </footer>
+      <div class="pov-toast" id="pov-toast" role="alert" aria-live="assertive"></div>
+    </section>
     <input id="folder-input" type="file" webkitdirectory directory multiple hidden>
     <input id="files-input" type="file" accept=".py,text/x-python" multiple hidden>
     <div class="toast" id="toast" role="alert" aria-live="assertive"></div>

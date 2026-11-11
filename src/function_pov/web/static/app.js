@@ -16,6 +16,8 @@
     panY: 0,
     pointer: null,
     suppressClick: false,
+    sourceFiles: [],
+    pov: null,
     toastTimer: null
   };
 
@@ -35,6 +37,17 @@
   $("#zoom-out").addEventListener("click", () => zoomAt(1 / 1.2, 500, 340));
   $("#zoom-label").addEventListener("click", resetView);
   $("#reset-view").addEventListener("click", resetView);
+  $("#enter-pov").addEventListener("click", openPovLauncher);
+  $("#pov-launch-form").addEventListener("submit", startPov);
+  $("#pov-launch-close").addEventListener("click", closePovLauncher);
+  $("#pov-launch-cancel").addEventListener("click", closePovLauncher);
+  $("#pov-back").addEventListener("click", backToMap);
+  $("#pov-restart").addEventListener("click", restartPov);
+  $("#pov-restart-top").addEventListener("click", restartPov);
+  $("#pov-previous").addEventListener("click", previousPovStep);
+  $("#pov-next").addEventListener("click", nextPovStep);
+  $("#pov-hint").addEventListener("click", showPovHint);
+  $("#pov-answer").addEventListener("click", showPovAnswer);
   graph.addEventListener("wheel", handleWheel, { passive: false });
   graph.addEventListener("pointerdown", beginCanvasDrag);
   graph.addEventListener("pointermove", movePointer);
@@ -64,8 +77,12 @@
         if (file.size > 2 * 1024 * 1024) {
           throw new Error(file.name + " is larger than the 2 MB per-file limit.");
         }
+        const relativePath = file.webkitRelativePath;
+        const projectPath = relativePath
+          ? relativePath.split("/").slice(1).join("/")
+          : file.name;
         return {
-          path: file.webkitRelativePath || file.name,
+          path: projectPath || file.name,
           content: await file.text()
         };
       }));
@@ -79,6 +96,7 @@
         throw new Error(result.error || "The project could not be analyzed.");
       }
       state.data = result;
+      state.sourceFiles = sourceFiles;
       state.selectedId = null;
       state.positions = layoutNodes(result.graph.nodes);
       state.scale = 1;
@@ -307,6 +325,487 @@
     const notice = $("#diagnostics-notice");
     notice.hidden = relevant.length === 0;
     notice.textContent = relevant.map((item) => (item.line ? "Line " + item.line + ": " : "") + item.message).join(" ");
+  }
+
+  function openPovLauncher() {
+    if (!state.data || !state.selectedId) return;
+    const fn = state.data.functions.find((item) => item.id === state.selectedId);
+    if (!fn) return;
+    $("#pov-launch-title").textContent = "Enter " + fn.name + "()";
+    $("#launch-error").hidden = true;
+    const container = $("#launch-arguments");
+    container.replaceChildren();
+    fn.parameters.forEach((parameter) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "launch-argument";
+      const label = document.createElement("label");
+      label.htmlFor = "pov-arg-" + parameter.name;
+      label.append(document.createTextNode(parameter.name));
+      const meta = document.createElement("span");
+      meta.textContent = parameter.default === null
+        ? " · required"
+        : " · optional, default " + parameter.default;
+      label.append(meta);
+      const input = document.createElement("input");
+      input.id = "pov-arg-" + parameter.name;
+      input.name = parameter.name;
+      input.type = "text";
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.placeholder = parameter.default === null
+        ? 'e.g. 4, true, or "hello"'
+        : "Leave blank to use the default";
+      wrapper.append(label, input);
+      container.append(wrapper);
+    });
+    $("#pov-launcher").hidden = false;
+    const firstInput = container.querySelector("input");
+    if (firstInput) firstInput.focus();
+    else $("#pov-launch-form button[type='submit']").focus();
+  }
+
+  function closePovLauncher() {
+    $("#pov-launcher").hidden = true;
+  }
+
+  async function startPov(event) {
+    event.preventDefault();
+    if (!state.selectedId || !state.sourceFiles.length) return;
+    const argumentsByName = {};
+    for (const input of $("#launch-arguments").querySelectorAll("input")) {
+      const text = input.value.trim();
+      const fn = state.data.functions.find((item) => item.id === state.selectedId);
+      const parameter = fn.parameters.find((item) => item.name === input.name);
+      if (!text) {
+        if (parameter.default === null) {
+          showLaunchError("Enter a value for the required parameter " + input.name + ".");
+          input.focus();
+          return;
+        }
+        continue;
+      }
+      try {
+        argumentsByName[input.name] = JSON.parse(text);
+      } catch (_error) {
+        showLaunchError("Use a JSON value for " + input.name + ', such as 4, true, or "hello".');
+        input.focus();
+        return;
+      }
+    }
+
+    const submit = $("#pov-launch-form button[type='submit']");
+    submit.disabled = true;
+    submit.textContent = "Preparing simulation…";
+    try {
+      const response = await fetch("/api/pov/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: state.sourceFiles,
+          function_id: state.selectedId,
+          arguments: argumentsByName
+        })
+      });
+      const session = await response.json();
+      if (!response.ok) throw new Error(session.error || "Could not start this POV simulation.");
+      state.pov = {
+        session,
+        index: 0,
+        passed: new Set(),
+        responses: new Map(),
+        complete: false
+      };
+      closePovLauncher();
+      $("#pov-overlay").hidden = false;
+      document.body.classList.add("pov-active");
+      renderPovStep();
+    } catch (error) {
+      showLaunchError(error.message || "Could not start this POV simulation.");
+    } finally {
+      submit.disabled = false;
+      submit.innerHTML = '<span aria-hidden="true">✦</span> Enter POV';
+    }
+  }
+
+  function showLaunchError(message) {
+    const error = $("#launch-error");
+    error.textContent = message;
+    error.hidden = false;
+  }
+
+  function backToMap() {
+    $("#pov-overlay").hidden = true;
+    $("#pov-launcher").hidden = true;
+    document.body.classList.remove("pov-active");
+    state.pov = null;
+  }
+
+  function restartPov() {
+    if (!state.pov) return;
+    state.pov.index = 0;
+    state.pov.passed.clear();
+    state.pov.responses.clear();
+    state.pov.complete = false;
+    renderPovStep();
+  }
+
+  function previousPovStep() {
+    if (!state.pov || state.pov.index === 0) return;
+    state.pov.complete = false;
+    state.pov.index -= 1;
+    renderPovStep();
+  }
+
+  function nextPovStep() {
+    if (!state.pov) return;
+    const step = currentPovStep();
+    if (step.challenge && !state.pov.passed.has(state.pov.index)) return;
+    if (state.pov.index === state.pov.session.steps.length - 1) {
+      state.pov.complete = true;
+      renderPovStep();
+      return;
+    }
+    state.pov.index += 1;
+    state.pov.complete = false;
+    renderPovStep();
+  }
+
+  function currentPovStep() {
+    return state.pov.session.steps[state.pov.index];
+  }
+
+  function renderPovStep() {
+    if (!state.pov) return;
+    const pov = state.pov;
+    const steps = pov.session.steps;
+    const step = steps[pov.index];
+    const source = pov.session.sources[step.function_id];
+    $("#pov-progress-label").textContent = pov.complete
+      ? "FUNCTION COMPLETE"
+      : "STEP " + (pov.index + 1) + " OF " + steps.length;
+    $("#pov-progress-function").textContent = step.function_name + "()";
+    $("#pov-progress-bar").style.width =
+      (pov.complete ? 100 : ((pov.index + 1) / steps.length) * 100) + "%";
+    $("#pov-code-file").textContent = source.file;
+    $("#pov-local-function").textContent = step.function_name + "()";
+    renderPovSource(source, step.line);
+    renderPovStack(step.stack);
+    renderPovLocals(step.variables);
+
+    const iconByKind = {
+      enter: "↘",
+      arithmetic: "∑",
+      condition: "◇",
+      function_call: "↗",
+      call_return: "↩",
+      return: "↗",
+      assignment: "＝"
+    };
+    const labelByKind = {
+      enter: "FUNCTION ENTRY",
+      arithmetic: "SOLVE THE EXPRESSION",
+      condition: "CHOOSE A BRANCH",
+      function_call: "FUNCTION CALL",
+      call_return: "BACK FROM A FUNCTION",
+      return: "RETURN TO CALLER",
+      assignment: "LOCAL ASSIGNMENT"
+    };
+    $("#pov-step-icon").textContent = iconByKind[step.kind] || "✦";
+    $("#pov-step-type").textContent = labelByKind[step.kind] || "FUNCTION STEP";
+    $("#pov-prompt").textContent = pov.complete
+      ? "You did it. Function returned!"
+      : step.prompt;
+    $("#pov-expression").textContent = pov.complete ? "" : step.expression;
+    renderPovTokens(step);
+    renderPovChallenge(step);
+    renderPovFeedback();
+
+    const passed = !step.challenge || pov.passed.has(pov.index);
+    $("#pov-previous").disabled = pov.index === 0;
+    $("#pov-next").disabled = !passed || pov.complete;
+    $("#pov-next").innerHTML = pov.index === steps.length - 1
+      ? 'Finish <span aria-hidden="true">✓</span>'
+      : 'Next <span aria-hidden="true">→</span>';
+    $("#pov-hint").disabled = !step.challenge || pov.passed.has(pov.index) || pov.complete;
+    $("#pov-answer").disabled = !step.challenge || pov.passed.has(pov.index) || pov.complete;
+    if (pov.complete) {
+      const challengeCount = steps.filter((item) => item.challenge).length;
+      const note = document.createElement("div");
+      note.className = "pov-complete";
+      note.textContent = "You completed " + challengeCount + " interactive challenge" +
+        (challengeCount === 1 ? "" : "s") +
+        ". Restart to try again, or head back to the function map.";
+      $("#pov-challenge").replaceChildren(note);
+      $("#pov-next").disabled = true;
+    }
+  }
+
+  function renderPovSource(source, activeLine) {
+    const container = $("#pov-source");
+    container.replaceChildren();
+    source.source.split("\n").forEach((text, index) => {
+      const lineNumber = source.line + index;
+      const line = document.createElement("span");
+      line.className = "pov-source-line";
+      line.classList.toggle("is-active", lineNumber === activeLine);
+      line.dataset.line = String(lineNumber);
+      const number = document.createElement("span");
+      number.className = "pov-source-line-number";
+      number.textContent = String(lineNumber);
+      line.append(number, document.createTextNode(text));
+      container.append(line);
+    });
+    const active = container.querySelector(".is-active");
+    if (active) active.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function renderPovStack(stack) {
+    const container = $("#pov-stack");
+    container.replaceChildren();
+    stack.forEach((frame, index) => {
+      const token = document.createElement("div");
+      token.className = "stack-frame";
+      token.classList.toggle("is-current", index === stack.length - 1);
+      const marker = document.createElement("span");
+      marker.textContent = index === stack.length - 1 ? "●" : "↳";
+      token.append(marker, document.createTextNode(frame.function_name + "()"));
+      container.append(token);
+    });
+  }
+
+  function renderPovLocals(variables) {
+    const container = $("#pov-locals");
+    container.replaceChildren();
+    const entries = Object.entries(variables || {});
+    if (!entries.length) {
+      const empty = document.createElement("span");
+      empty.className = "locals-empty";
+      empty.textContent = "No local values yet";
+      container.append(empty);
+      return;
+    }
+    entries.forEach(([name, value]) => {
+      const token = document.createElement("span");
+      token.className = "local-token";
+      const key = document.createElement("span");
+      key.className = "local-token-name";
+      key.textContent = name;
+      const val = document.createElement("span");
+      val.className = "local-token-value";
+      val.textContent = formatPovValue(value);
+      token.append(key, val);
+      container.append(token);
+    });
+  }
+
+  function renderPovTokens(step) {
+    const container = $("#pov-argument-tokens");
+    container.replaceChildren();
+    if (step.kind === "enter") {
+      Object.entries(step.variables || {}).forEach(([name, value]) => {
+        const token = document.createElement("span");
+        token.className = "argument-token";
+        const key = document.createElement("span");
+        key.className = "argument-token-name";
+        key.textContent = name + " =";
+        const val = document.createElement("span");
+        val.className = "argument-token-value";
+        val.textContent = formatPovValue(value);
+        token.append(key, val);
+        container.append(token);
+      });
+    }
+    const response = state.pov.responses.get(state.pov.index);
+    if (response && response.revealed) {
+      const token = document.createElement("span");
+      token.className = "return-token is-animated";
+      token.textContent = "↗ Returned " + formatPovValue(response.answer);
+      container.append(token);
+    } else if (step.kind === "call_return" && !step.challenge) {
+      const token = document.createElement("span");
+      token.className = "return-token is-animated";
+      token.textContent = step.expression;
+      container.append(token);
+    }
+  }
+
+  function renderPovChallenge(step) {
+    const container = $("#pov-challenge");
+    container.replaceChildren();
+    if (state.pov.complete) return;
+    if (!step.challenge) {
+      const note = document.createElement("p");
+      note.className = "pov-challenge-prompt";
+      note.textContent = step.kind === "enter"
+        ? "Take a look at the values your caller passed in. Continue when you're ready."
+        : "Follow the highlighted line, then continue to the next moment.";
+      container.append(note);
+      return;
+    }
+    const prompt = document.createElement("p");
+    prompt.className = "pov-challenge-prompt";
+    prompt.textContent = step.kind === "return"
+      ? "Enter the value you are returning."
+      : step.kind === "condition"
+        ? "Choose the result of this condition."
+        : step.kind === "function_call"
+          ? "Select the function name from the code."
+          : "Enter your result, then check it.";
+    container.append(prompt);
+    if (step.kind === "condition" || step.kind === "function_call") {
+      const choices = document.createElement("div");
+      choices.className = "pov-choice-row";
+      (step.kind === "condition" ? ["True", "False"] : step.choices).forEach((choice) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "pov-choice";
+        button.textContent = choice;
+        button.disabled = state.pov.passed.has(state.pov.index);
+        button.addEventListener("click", () => {
+          const value = step.kind === "condition" ? choice === "True" : choice;
+          checkPovAnswer(value);
+        });
+        choices.append(button);
+      });
+      container.append(choices);
+      return;
+    }
+    const row = document.createElement("div");
+    row.className = "pov-answer-row";
+    const input = document.createElement("input");
+    input.className = "pov-answer-input";
+    input.id = "pov-answer-input";
+    input.type = "text";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.placeholder = 'Your answer (e.g. 16 or "hello")';
+    input.disabled = state.pov.passed.has(state.pov.index);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") checkTextAnswer();
+    });
+    const check = document.createElement("button");
+    check.type = "button";
+    check.className = "button button-primary pov-check-button";
+    check.textContent = "Check answer";
+    check.disabled = state.pov.passed.has(state.pov.index);
+    check.addEventListener("click", checkTextAnswer);
+    row.append(input, check);
+    container.append(row);
+  }
+
+  function checkTextAnswer() {
+    const input = $("#pov-answer-input");
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) {
+      showPovFeedback("Enter an answer first.", "wrong");
+      input.focus();
+      return;
+    }
+    let value;
+    try {
+      value = JSON.parse(text);
+    } catch (_error) {
+      value = text;
+    }
+    checkPovAnswer(value);
+  }
+
+  async function checkPovAnswer(answer) {
+    const pov = state.pov;
+    if (!pov) return;
+    const index = pov.index;
+    try {
+      const result = await povRequest("/api/pov/check", {
+        session_id: pov.session.session_id,
+        step: index,
+        answer
+      });
+      if (result.correct) {
+        pov.passed.add(index);
+        pov.responses.set(index, {
+          revealed: true,
+          answer: result.answer,
+          feedback: result.feedback,
+          kind: "correct"
+        });
+        renderPovStep();
+      } else {
+        showPovFeedback(result.feedback, "wrong");
+      }
+    } catch (error) {
+      showPovFeedback(error.message, "wrong");
+    }
+  }
+
+  async function showPovHint() {
+    if (!state.pov) return;
+    try {
+      const result = await povRequest("/api/pov/hint", {
+        session_id: state.pov.session.session_id,
+        step: state.pov.index
+      });
+      showPovFeedback(result.hint, "hint");
+    } catch (error) {
+      showPovFeedback(error.message, "wrong");
+    }
+  }
+
+  async function showPovAnswer() {
+    if (!state.pov) return;
+    const index = state.pov.index;
+    try {
+      const result = await povRequest("/api/pov/answer", {
+        session_id: state.pov.session.session_id,
+        step: index
+      });
+      state.pov.passed.add(index);
+      state.pov.responses.set(index, {
+        revealed: true,
+        answer: result.answer,
+        feedback: result.feedback,
+        kind: "hint"
+      });
+      renderPovStep();
+    } catch (error) {
+      showPovFeedback(error.message, "wrong");
+    }
+  }
+
+  async function povRequest(path, payload) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "The POV action could not be completed.");
+    return result;
+  }
+
+  function renderPovFeedback() {
+    const feedback = $("#pov-feedback");
+    const response = state.pov.responses.get(state.pov.index);
+    feedback.hidden = !response || !response.feedback;
+    feedback.className = "pov-feedback" + (response && response.kind ? " is-" + response.kind : "");
+    feedback.textContent = response ? response.feedback || "" : "";
+  }
+
+  function showPovFeedback(message, kind) {
+    const feedback = $("#pov-feedback");
+    feedback.hidden = false;
+    feedback.className = "pov-feedback" + (kind ? " is-" + kind : "");
+    feedback.textContent = message;
+    if (state.pov) {
+      const previous = state.pov.responses.get(state.pov.index) || {};
+      previous.feedback = message;
+      previous.kind = kind;
+      state.pov.responses.set(state.pov.index, previous);
+    }
+  }
+
+  function formatPovValue(value) {
+    return JSON.stringify(value);
   }
 
   function renderConnections(selector, ids, arrow) {
