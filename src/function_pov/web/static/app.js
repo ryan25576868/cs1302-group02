@@ -44,6 +44,8 @@
   $("#pov-back").addEventListener("click", backToMap);
   $("#pov-restart").addEventListener("click", restartPov);
   $("#pov-restart-top").addEventListener("click", restartPov);
+  $("#pov-completion-replay").addEventListener("click", restartPov);
+  $("#pov-completion-back").addEventListener("click", backToMap);
   $("#pov-previous").addEventListener("click", previousPovStep);
   $("#pov-next").addEventListener("click", nextPovStep);
   $("#pov-hint").addEventListener("click", showPovHint);
@@ -486,6 +488,14 @@
     $("#pov-progress-function").textContent = step.function_name + "()";
     $("#pov-progress-bar").style.width =
       (pov.complete ? 100 : ((pov.index + 1) / steps.length) * 100) + "%";
+    $("#pov-main").hidden = pov.complete;
+    $("#pov-completion").hidden = !pov.complete;
+    $("#pov-controls").hidden = pov.complete;
+    if (pov.complete) {
+      renderPovCompletion();
+      return;
+    }
+
     $("#pov-code-file").textContent = source.file;
     $("#pov-local-function").textContent = step.function_name + "()";
     renderPovSource(source, step.line);
@@ -512,10 +522,8 @@
     };
     $("#pov-step-icon").textContent = iconByKind[step.kind] || "✦";
     $("#pov-step-type").textContent = labelByKind[step.kind] || "FUNCTION STEP";
-    $("#pov-prompt").textContent = pov.complete
-      ? "You did it. Function returned!"
-      : step.prompt;
-    $("#pov-expression").textContent = pov.complete ? "" : step.expression;
+    $("#pov-prompt").textContent = step.prompt;
+    $("#pov-expression").textContent = step.expression;
     renderPovTokens(step);
     renderPovChallenge(step);
     renderPovFeedback();
@@ -528,16 +536,37 @@
       : 'Next <span aria-hidden="true">→</span>';
     $("#pov-hint").disabled = !step.challenge || pov.passed.has(pov.index) || pov.complete;
     $("#pov-answer").disabled = !step.challenge || pov.passed.has(pov.index) || pov.complete;
-    if (pov.complete) {
-      const challengeCount = steps.filter((item) => item.challenge).length;
-      const note = document.createElement("div");
-      note.className = "pov-complete";
-      note.textContent = "You completed " + challengeCount + " interactive challenge" +
-        (challengeCount === 1 ? "" : "s") +
-        ". Restart to try again, or head back to the function map.";
-      $("#pov-challenge").replaceChildren(note);
-      $("#pov-next").disabled = true;
-    }
+  }
+
+  function renderPovCompletion() {
+    const pov = state.pov;
+    $("#pov-overlay").scrollTop = 0;
+    const steps = pov.session.steps;
+    const challengeSteps = steps
+      .map((step, index) => ({ step, index }))
+      .filter(({ step }) => step.challenge);
+    const answeredByLearner = challengeSteps.filter(({ index }) => {
+      const response = pov.responses.get(index);
+      return response && response.solvedBy === "attempt";
+    }).length;
+    const revealed = challengeSteps.filter(({ index }) => {
+      const response = pov.responses.get(index);
+      return response && response.solvedBy === "reveal";
+    }).length;
+    const finalResponse = [...challengeSteps].reverse()
+      .map(({ index }) => pov.responses.get(index))
+      .find((response) => response && Object.prototype.hasOwnProperty.call(response, "answer"));
+    const journey = Array.from(new Set(steps.map((step) => step.function_name)));
+
+    $("#pov-completion-value").textContent = finalResponse
+      ? formatPovValue(finalResponse.answer)
+      : "No explicit return value";
+    $("#pov-completion-summary").textContent =
+      "You traced " + journey.join(" → ") + " across " +
+      challengeSteps.length + " interactive challenge" +
+      (challengeSteps.length === 1 ? "" : "s") + ".";
+    $("#pov-completion-effort").textContent =
+      answeredByLearner + " solved by you · " + revealed + " revealed";
   }
 
   function renderPovSource(source, activeLine) {
@@ -616,7 +645,7 @@
       });
     }
     const response = state.pov.responses.get(state.pov.index);
-    if (response && response.revealed) {
+    if (response && Object.prototype.hasOwnProperty.call(response, "answer")) {
       const token = document.createElement("span");
       token.className = "return-token is-animated";
       token.textContent = "↗ Returned " + formatPovValue(response.answer);
@@ -655,21 +684,26 @@
     if (step.kind === "condition" || step.kind === "function_call") {
       const choices = document.createElement("div");
       choices.className = "pov-choice-row";
+      const response = state.pov.responses.get(state.pov.index);
       (step.kind === "condition" ? ["True", "False"] : step.choices).forEach((choice) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "pov-choice";
         button.textContent = choice;
         button.disabled = state.pov.passed.has(state.pov.index);
+        button.classList.toggle("is-selected", Boolean(response && response.attempt === choice));
+        button.setAttribute("aria-pressed", String(Boolean(response && response.attempt === choice)));
         button.addEventListener("click", () => {
           const value = step.kind === "condition" ? choice === "True" : choice;
-          checkPovAnswer(value);
+          checkPovAnswer(value, choice);
         });
         choices.append(button);
       });
       container.append(choices);
+      appendPovAnswerReview(container, response);
       return;
     }
+    const response = state.pov.responses.get(state.pov.index);
     const row = document.createElement("div");
     row.className = "pov-answer-row";
     const input = document.createElement("input");
@@ -679,6 +713,7 @@
     input.autocomplete = "off";
     input.spellcheck = false;
     input.placeholder = 'Your answer (e.g. 16 or "hello")';
+    input.value = response && response.attempt !== undefined ? response.attempt : "";
     input.disabled = state.pov.passed.has(state.pov.index);
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") checkTextAnswer();
@@ -691,6 +726,41 @@
     check.addEventListener("click", checkTextAnswer);
     row.append(input, check);
     container.append(row);
+    appendPovAnswerReview(container, response);
+  }
+
+  function appendPovAnswerReview(container, response) {
+    if (!response || !response.attempts || !response.attempts.length) return;
+    const review = document.createElement("div");
+    review.className = "pov-answer-review";
+    const attempts = document.createElement("div");
+    attempts.className = "pov-review-card";
+    const attemptsLabel = document.createElement("span");
+    attemptsLabel.className = "pov-review-label";
+    attemptsLabel.textContent = "YOUR ATTEMPTS";
+    const list = document.createElement("ol");
+    list.className = "pov-attempt-list";
+    response.attempts.forEach((attempt, index) => {
+      const item = document.createElement("li");
+      item.className = attempt.correct ? "is-correct" : "is-incorrect";
+      item.textContent = "Attempt " + (index + 1) + ": " + attempt.value;
+      list.append(item);
+    });
+    attempts.append(attemptsLabel, list);
+    review.append(attempts);
+
+    if (Object.prototype.hasOwnProperty.call(response, "answer")) {
+      const answer = document.createElement("div");
+      answer.className = "pov-review-card is-answer";
+      const label = document.createElement("span");
+      label.className = "pov-review-label";
+      label.textContent = response.solvedBy === "reveal" ? "REVEALED ANSWER" : "CHECKED RESULT";
+      const value = document.createElement("code");
+      value.textContent = formatPovValue(response.answer);
+      answer.append(label, value);
+      review.append(answer);
+    }
+    container.append(review);
   }
 
   function checkTextAnswer() {
@@ -708,10 +778,10 @@
     } catch (_error) {
       value = text;
     }
-    checkPovAnswer(value);
+    checkPovAnswer(value, text);
   }
 
-  async function checkPovAnswer(answer) {
+  async function checkPovAnswer(answer, attempt) {
     const pov = state.pov;
     if (!pov) return;
     const index = pov.index;
@@ -721,17 +791,25 @@
         step: index,
         answer
       });
+      const previous = pov.responses.get(index) || { attempts: [] };
+      previous.attempts = previous.attempts || [];
       if (result.correct) {
+        previous.attempt = String(attempt);
+        previous.attempts.push({ value: String(attempt), correct: true });
+        previous.answer = result.answer;
+        previous.feedback = result.feedback;
+        previous.kind = "correct";
+        previous.solvedBy = "attempt";
+        pov.responses.set(index, previous);
         pov.passed.add(index);
-        pov.responses.set(index, {
-          revealed: true,
-          answer: result.answer,
-          feedback: result.feedback,
-          kind: "correct"
-        });
         renderPovStep();
       } else {
-        showPovFeedback(result.feedback, "wrong");
+        previous.attempt = String(attempt);
+        previous.attempts.push({ value: String(attempt), correct: false });
+        previous.feedback = result.feedback;
+        previous.kind = "wrong";
+        pov.responses.set(index, previous);
+        renderPovStep();
       }
     } catch (error) {
       showPovFeedback(error.message, "wrong");
@@ -760,12 +838,12 @@
         step: index
       });
       state.pov.passed.add(index);
-      state.pov.responses.set(index, {
-        revealed: true,
-        answer: result.answer,
-        feedback: result.feedback,
-        kind: "hint"
-      });
+      const previous = state.pov.responses.get(index) || { attempts: [] };
+      previous.answer = result.answer;
+      previous.feedback = "Answer revealed. Compare it with your attempt to see how this step continues.";
+      previous.kind = "hint";
+      previous.solvedBy = "reveal";
+      state.pov.responses.set(index, previous);
       renderPovStep();
     } catch (error) {
       showPovFeedback(error.message, "wrong");

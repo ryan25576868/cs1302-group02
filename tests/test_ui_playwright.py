@@ -176,9 +176,47 @@ class FunctionGraphBrowserTests(unittest.TestCase):
         self.assertIn("FUNCTION COMPLETE", self.page.locator("#pov-progress-label").inner_text())
         self.page.get_by_role("button", name="Restart").last.click()
         self.assertEqual(self.page.locator("#pov-progress-label").inner_text().split()[1], "1")
-        self.page.get_by_role("button", name="Back to map").click()
+        self.page.get_by_role("button", name="Back to map").last.click()
         self.assertTrue(self.page.locator("#pov-overlay").is_hidden())
         self.assertEqual(self.page.locator("#details-heading").inner_text(), "start")
+
+    def test_pov_entry_and_gameplay_keep_the_light_pixel_game_identity(self):
+        project = Path(__file__).resolve().parents[1] / "examples" / "basic_project"
+        self.page.locator("#folder-input").set_input_files(str(project))
+        self.page.locator('[data-id$=".calculate"]').click()
+        self.page.locator("#enter-pov").click()
+
+        self.assertIn("mysterious function space", self.page.locator(".launch-description").inner_text())
+        self.assertEqual(self.page.locator(".launch-mascot").count(), 1)
+        self.assertEqual(self.page.locator("#launch-arguments input").count(), 2)
+        self.assertEqual(
+            self.page.locator(".launch-card").evaluate(
+                "(element) => getComputedStyle(element).borderTopColor"
+            ),
+            "rgb(237, 83, 97)",
+        )
+
+        self.page.locator("#pov-arg-value").fill("21")
+        self.page.get_by_role("button", name="Enter POV").last.click()
+        self.page.locator("#pov-overlay:not([hidden])").wait_for()
+        self.assertEqual(
+            self.page.locator("#pov-overlay").evaluate(
+                "(element) => getComputedStyle(element).backgroundColor"
+            ),
+            "rgb(245, 248, 253)",
+        )
+        self.assertEqual(self.page.locator(".pov-guide-mascot").count(), 1)
+        self.assertEqual(
+            self.page.locator(".pov-code-card").evaluate(
+                "(element) => getComputedStyle(element).backgroundColor"
+            ),
+            "rgb(255, 255, 255)",
+        )
+        self.page.get_by_role("button", name="Next").click()
+        self.page.locator("#pov-answer-input").fill("42")
+        self.page.get_by_role("button", name="Check answer").click()
+        self.page.get_by_text("Attempt 1: 42").wait_for()
+        self.assertEqual(self.page.locator("#pov-answer-input").input_value(), "42")
 
     def test_pov_runs_basic_project_import_and_returns_formatted_value(self):
         project = Path(__file__).resolve().parents[1] / "examples" / "basic_project"
@@ -217,8 +255,70 @@ class FunctionGraphBrowserTests(unittest.TestCase):
         self.page.get_by_role("button", name="Check answer").click()
         self.page.get_by_role("button", name="Finish").click()
         self.page.get_by_text("You did it. Function returned!").wait_for()
-        self.page.get_by_role("button", name="Back to map").click()
+        self.page.get_by_role("button", name="Back to map").last.click()
         self.assertTrue(self.page.locator("#pov-overlay").is_hidden())
+
+    def test_pov_preserves_attempts_across_retries_and_step_navigation(self):
+        self.enter_function("start", {"value": "4"})
+        self.page.get_by_role("button", name="Next").click()
+        self.page.get_by_role("button", name="multiply", exact=True).click()
+        self.page.get_by_role("button", name="Next").click()
+        self.page.get_by_role("button", name="Next").click()
+
+        self.assertEqual(self.page.locator("#pov-step-type").inner_text(), "SOLVE THE EXPRESSION")
+        answer = self.page.locator("#pov-answer-input")
+        answer.fill("7")
+        self.page.get_by_role("button", name="Check answer").click()
+        self.assertEqual(answer.input_value(), "7")
+        self.assertIn("Attempt 1: 7", self.page.locator(".pov-answer-review").inner_text())
+
+        answer.fill("8")
+        self.page.get_by_role("button", name="Check answer").click()
+        self.page.get_by_text("Attempt 2: 8").wait_for()
+        self.assertEqual(self.page.locator("#pov-answer-input").input_value(), "8")
+        review = self.page.locator(".pov-answer-review")
+        self.assertIn("Attempt 1: 7", review.inner_text())
+        self.assertIn("Attempt 2: 8", review.inner_text())
+        self.assertIn("CHECKED RESULT", review.inner_text())
+
+        self.page.get_by_role("button", name="Previous").click()
+        self.page.get_by_role("button", name="Next").click()
+        self.assertEqual(self.page.locator("#pov-answer-input").input_value(), "8")
+        self.assertIn("Attempt 1: 7", self.page.locator(".pov-answer-review").inner_text())
+
+    def test_pov_reveal_keeps_attempt_and_stage_clear_has_result_and_actions(self):
+        self.enter_function("classify", {"value": "-2"})
+        self.page.get_by_role("button", name="Next").click()
+        self.page.locator(".pov-choice", has_text="False").click()
+        self.page.get_by_role("button", name="Next").click()
+        self.page.locator("#pov-answer-input").fill("99")
+        self.page.get_by_role("button", name="Check answer").click()
+        self.page.get_by_role("button", name="Show answer").click()
+
+        self.page.get_by_text("REVEALED ANSWER").wait_for()
+        self.assertEqual(self.page.locator("#pov-answer-input").input_value(), "99")
+        self.assertTrue(self.page.locator("#pov-answer-input").is_disabled())
+        review = self.page.locator(".pov-answer-review")
+        self.assertIn("Attempt 1: 99", review.inner_text())
+        self.assertIn("REVEALED ANSWER", review.inner_text())
+        self.assertIn("-1", review.inner_text())
+        self.assertIn("revealed", self.page.locator("#pov-feedback").inner_text().lower())
+
+        self.page.get_by_role("button", name="Finish").click()
+        self.assertEqual(self.page.locator("#pov-completion-title").inner_text(), "Stage clear!")
+        self.assertIn("-1", self.page.locator("#pov-completion-value").inner_text())
+        self.assertIn("classify", self.page.locator("#pov-completion-summary").inner_text())
+        self.assertIn("1 revealed", self.page.locator("#pov-completion-effort").inner_text())
+        self.assertEqual(self.page.locator(".completion-mascot").count(), 1)
+        self.assertTrue(self.page.locator("#pov-main").is_hidden())
+        self.assertTrue(self.page.locator("#pov-controls").is_hidden())
+        self.assertEqual(self.page.locator("#pov-overlay").evaluate("(element) => element.scrollTop"), 0)
+
+        self.page.get_by_role("button", name="Replay function").click()
+        self.assertFalse(self.page.locator("#pov-main").is_hidden())
+        self.assertTrue(self.page.locator("#pov-completion").is_hidden())
+        self.assertEqual(self.page.locator("#pov-progress-label").inner_text(), "STEP 1 OF 3")
+        self.page.get_by_role("button", name="Back to map").click()
 
     def test_pov_takes_false_conditional_branch_and_return(self):
         self.enter_function("classify", {"value": "-2"})

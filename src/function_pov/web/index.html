@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#101114">
+    <meta name="theme-color" content="#f3f6fb">
     <title>Function POV — Code Atlas</title>
     <link rel="stylesheet" href="/static/styles.css">
   </head>
@@ -47,13 +47,13 @@
             <svg id="function-graph" class="function-graph" viewBox="0 0 1000 680" preserveAspectRatio="none" role="img" aria-label="Interactive function call graph">
               <defs>
                 <pattern id="dot-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-                  <circle cx="1" cy="1" r="1" fill="#34363d" />
+                  <circle cx="1" cy="1" r="1" fill="#dce5f1" />
                 </pattern>
                 <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
-                  <path d="M0,0 L8,4 L0,8 z" fill="#555a65" />
+                  <path d="M0,0 L8,4 L0,8 z" fill="#9aabc1" />
                 </marker>
                 <marker id="arrow-active" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
-                  <path d="M0,0 L8,4 L0,8 z" fill="#8f80ff" />
+                  <path d="M0,0 L8,4 L0,8 z" fill="#2563eb" />
                 </marker>
               </defs>
               <rect class="graph-background" width="1000" height="680" fill="url(#dot-grid)"></rect>
@@ -134,17 +134,34 @@
     <div class="pov-launcher" id="pov-launcher" hidden>
       <form class="launch-card" id="pov-launch-form">
         <button class="icon-button launch-close" id="pov-launch-close" type="button" aria-label="Close">×</button>
-        <p class="eyebrow">YOUR FUNCTION IS WAITING</p>
+        <div class="launch-hero" aria-hidden="true">
+          <span class="launch-orbit orbit-one"></span>
+          <span class="launch-orbit orbit-two"></span>
+          <svg class="pixel-mascot launch-mascot" viewBox="0 0 64 64"><use href="#function-spirit"></use></svg>
+        </div>
+        <p class="eyebrow">A NEW FUNCTION SPACE</p>
         <h2 id="pov-launch-title">Enter function</h2>
-        <p class="launch-description">Choose the values sent by the caller. Use JSON values such as <code>4</code>, <code>true</code>, or <code>"hello"</code>.</p>
+        <p class="launch-description">A mysterious function space awaits. Follow your values to see where they lead.</p>
         <div class="launch-arguments" id="launch-arguments"></div>
+        <p class="launch-input-hint">Choose the values your caller sends. Numbers, booleans, and quoted text are welcome.</p>
         <p class="launch-error" id="launch-error" role="alert" hidden></p>
         <div class="launch-actions">
           <button class="button button-secondary" id="pov-launch-cancel" type="button">Cancel</button>
-          <button class="button button-primary" type="submit"><span aria-hidden="true">✦</span> Enter POV</button>
+          <button class="button button-primary launch-enter" type="submit"><span aria-hidden="true">✦</span> Enter POV</button>
         </div>
       </form>
     </div>
+    <svg class="mascot-library" aria-hidden="true" focusable="false">
+      <symbol id="function-spirit" viewBox="0 0 64 64">
+        <path fill="#2f67cb" d="M24 4h16v8h8v8h8v24h-8v8h-8v8h-8v-8h-8v8h-8v-8H8v-8H4V24h8v-8h8v-8h4z"/>
+        <path fill="#a9d5ff" d="M24 12h16v8h8v8h4v12h-8v8H20v-8h-8V28h8v-8h4z"/>
+        <path fill="#fff" d="M24 20h8v8h-8zM40 20h8v8h-8z"/>
+        <path fill="#16386e" d="M28 24h4v8h-4zM44 24h4v8h-4z"/>
+        <path fill="#ef5361" d="M16 32h4v4h-4zM48 32h4v4h-4zM28 40h12v4H28z"/>
+        <path fill="#fff" d="M20 52h8v4h-8zM36 52h8v4h-8z"/>
+        <path fill="#ef5361" d="M48 8h4v4h-4zM52 4h4v4h-4zM56 8h4v4h-4zM52 12h4v4h-4z"/>
+      </symbol>
+    </svg>
     <section class="pov-overlay" id="pov-overlay" aria-label="Function POV simulation" hidden>
       <header class="pov-topbar">
         <button class="pov-back" id="pov-back" type="button"><span aria-hidden="true">←</span> Back to map</button>
@@ -155,7 +172,7 @@
         <div class="pov-progress-meta"><span id="pov-progress-label">STEP 1 OF 1</span><span id="pov-progress-function"></span></div>
         <div class="pov-progress-track"><span id="pov-progress-bar"></span></div>
       </div>
-      <main class="pov-main">
+      <main class="pov-main" id="pov-main">
         <section class="pov-stage-column">
           <div class="pov-stack-card">
             <div class="pov-card-label"><span class="stack-glyph">▤</span> CALL STACK</div>
@@ -171,6 +188,9 @@
           </div>
         </section>
         <section class="pov-action-column">
+          <div class="pov-guide-mascot" aria-hidden="true">
+            <svg class="pixel-mascot" viewBox="0 0 64 64"><use href="#function-spirit"></use></svg>
+          </div>
           <div class="pov-step-heading"><span class="pov-step-icon" id="pov-step-icon">✦</span><span class="pov-step-type" id="pov-step-type">FUNCTION ENTRY</span></div>
           <h1 class="pov-prompt" id="pov-prompt"></h1>
           <p class="pov-expression" id="pov-expression"></p>
@@ -180,7 +200,30 @@
           <div class="pov-learning-note"><span>✦</span><span>You're following a safe, simplified simulation of this function — Python code is never executed.</span></div>
         </section>
       </main>
-      <footer class="pov-controls">
+      <section class="pov-completion-screen" id="pov-completion" aria-labelledby="pov-completion-title" hidden>
+        <div class="pov-celebration" aria-hidden="true">
+          <span class="completion-mascot-frame">
+            <svg class="pixel-mascot completion-mascot" viewBox="0 0 64 64"><use href="#function-spirit"></use></svg>
+          </span>
+          <span class="pixel-spark spark-one"></span>
+          <span class="pixel-spark spark-two"></span>
+          <span class="pixel-spark spark-three"></span>
+        </div>
+        <p class="eyebrow">MISSION COMPLETE</p>
+        <h1 id="pov-completion-title">Stage clear!</h1>
+        <p class="pov-completion-lede">You did it. Function returned!</p>
+        <div class="pov-result-card">
+          <span>FINAL RETURN VALUE</span>
+          <code id="pov-completion-value"></code>
+        </div>
+        <p class="pov-completion-summary" id="pov-completion-summary"></p>
+        <p class="pov-completion-effort" id="pov-completion-effort"></p>
+        <div class="pov-completion-actions">
+          <button class="button button-primary" id="pov-completion-replay" type="button">↻ Replay function</button>
+          <button class="pov-control-button" id="pov-completion-back" type="button">Back to map</button>
+        </div>
+      </section>
+      <footer class="pov-controls" id="pov-controls">
         <div class="pov-control-left">
           <button class="pov-control-button" id="pov-previous" type="button">← Previous</button>
           <button class="pov-control-button" id="pov-restart" type="button">↻ Restart</button>
