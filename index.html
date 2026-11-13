@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Prism turns code into clear flowcharts, syntax trees, animated execution traces, and data maps — then explains it in plain English. Bring your own AI.">
+  <meta name="theme-color" content="#f4f1ea">
+  <title>Prism — see your code from every angle</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="ambient" aria-hidden="true">
+    <div class="ambient-orb ambient-orb--one"></div>
+    <div class="ambient-orb ambient-orb--two"></div>
+    <div class="ambient-grid"></div>
+  </div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="#" id="brandLink" aria-label="Prism home">
+        <span class="brand-symbol" id="brandSymbol" aria-hidden="true"></span>
+        <span class="brand-word">prism</span>
+        <span class="brand-tag">visual code lab</span>
+      </a>
+      <div class="header-actions">
+        <span class="local-status" title="Code is analyzed in this browser tab">
+          <span class="local-status-dot" aria-hidden="true"></span>
+          <span>Local analysis</span>
+        </span>
+        <button class="button button--soft button--sm ai-trigger" id="aiButton" type="button" aria-label="Connect AI">
+          <span data-icon="sparkles" data-icon-size="16" aria-hidden="true"></span>
+          <span data-ai-label>Connect AI</span>
+          <span class="ai-status-dot" id="aiStatusDot" aria-hidden="true" hidden></span>
+        </button>
+        <button class="icon-button" id="themeToggle" type="button" aria-label="Switch to dark theme" title="Change theme">
+          <span data-icon="moon" data-icon-size="18" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ================================================================ -->
+    <!-- Intake / setup                                                    -->
+    <!-- ================================================================ -->
+    <section class="intake is-entering" id="intakeView">
+      <div class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span>Code, made visible</p>
+          <h1>See your code<br><span class="serif-accent">from every angle.</span></h1>
+          <p class="hero-subtitle">Turn a snippet into a picture you can follow, then read a plain-English guide that explains what every line is doing — and why.</p>
+          <div class="hero-notes">
+            <span class="hero-note"><span data-icon="lock" data-icon-size="15" aria-hidden="true"></span>Local-first by default</span>
+            <span class="hero-note"><span data-icon="sparkles" data-icon-size="15" aria-hidden="true"></span>Bring your own AI</span>
+          </div>
+        </div>
+        <div class="hero-aside" aria-hidden="true">
+          <div class="preview-board">
+            <div class="preview-topbar">
+              <span class="window-dots"><i></i><i></i><i></i></span>
+              <span class="preview-label">flow · preview</span>
+              <span class="preview-badge">LIVE MAP</span>
+            </div>
+            <div class="preview-canvas">
+              <div class="preview-node preview-node--start"><span class="node-dot node-dot--start"></span>Start</div>
+              <div class="preview-line preview-line--short"></div>
+              <div class="preview-node preview-node--action">const cart = [12, 8, 25]</div>
+              <div class="preview-line"></div>
+              <div class="preview-node preview-node--decision">
+                <span class="preview-decision-mark">?</span>
+                <span>price &gt; 10</span>
+              </div>
+              <div class="preview-branch-row">
+                <div class="preview-branch preview-branch--yes">
+                  <span class="preview-branch-label">YES</span>
+                  <div class="preview-node preview-node--soft">total += price</div>
+                </div>
+                <div class="preview-branch preview-branch--no">
+                  <span class="preview-branch-label">NO</span>
+                  <div class="preview-node preview-node--ghost">skip</div>
+                </div>
+              </div>
+              <div class="preview-line preview-line--short"></div>
+              <div class="preview-node preview-node--output"><span data-icon="terminal" data-icon-size="13"></span>console.log(total)</div>
+            </div>
+            <div class="preview-float preview-float--one"><span class="mini-dot"></span>23 values tracked</div>
+            <div class="preview-float preview-float--two"><span data-icon="sparkles" data-icon-size="13"></span>plain-English guide</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="builder">
+        <div class="builder-topbar">
+          <div class="builder-heading">
+            <span class="builder-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span>New exploration</span>
+          </div>
+          <div class="builder-runtime"><span class="pulse-dot" aria-hidden="true"></span>Runs locally in your browser</div>
+        </div>
+
+        <div class="builder-grid">
+          <div class="setup-column">
+            <section class="setup-step setup-step--language">
+              <header class="step-heading">
+                <span class="step-number">01</span>
+                <div class="step-heading-copy">
+                  <h2>Choose a language</h2>
+                  <p>We’ll load a working example you can edit.</p>
+                </div>
+              </header>
+              <div class="language-grid" id="languageGrid" role="radiogroup" aria-label="Programming language"></div>
+            </section>
+
+            <section class="setup-step setup-step--mode is-locked" id="modeStep">
+              <header class="step-heading">
+                <span class="step-number">02</span>
+                <div class="step-heading-copy">
+                  <h2>Choose a lens</h2>
+                  <p>Same code, a different way to see it.</p>
+                </div>
+              </header>
+              <div class="lens-grid" id="modeGrid" role="radiogroup" aria-label="Visualization style"></div>
+              <p class="locked-hint" id="modeHint"><span data-icon="lock" data-icon-size="13" aria-hidden="true"></span>Pick a language to unlock the lenses.</p>
+            </section>
+          </div>
+
+          <section class="setup-step setup-step--editor">
+            <header class="step-heading step-heading--editor">
+              <span class="step-number">03</span>
+              <div class="step-heading-copy">
+                <h2>Add your code</h2>
+                <p>Paste a snippet, or start from the example.</p>
+              </div>
+              <div class="editor-language-chip" id="editorLanguageChip" hidden>
+                <span class="language-chip-glyph" id="editorLanguageGlyph">JS</span>
+                <span id="editorFileName">main.js</span>
+              </div>
+            </header>
+
+            <div class="code-card" id="codeCard">
+              <div class="editor-toolbar">
+                <div class="editor-toolbar-left">
+                  <span class="window-dots window-dots--dark"><i></i><i></i><i></i></span>
+                  <span class="editor-file-label" id="editorFileLabel">No file selected</span>
+                </div>
+                <div class="editor-toolbar-right">
+                  <span class="editor-lines" id="editorLines">0 lines</span>
+                  <button type="button" class="editor-link" id="loadSampleButton" disabled>
+                    <span data-icon="reset" data-icon-size="14" aria-hidden="true"></span>
+                    Load starter
+                  </button>
+                </div>
+              </div>
+              <div class="editor-mount" id="editorMount"></div>
+            </div>
+
+            <div class="analyze-bar">
+              <div class="analyze-note">
+                <span class="analyze-note-icon"><span data-icon="sparkles" data-icon-size="15" aria-hidden="true"></span></span>
+                <div>
+                  <strong>Four views. One clear explanation.</strong>
+                  <span>Flow, structure, execution, and data — all from your code.</span>
+                </div>
+              </div>
+              <button type="button" class="button button--primary button--analyze" id="analyzeButton" disabled>
+                <span class="button-label">Visualize &amp; explain</span>
+                <span class="button-arrow" data-icon="arrowRight" data-icon-size="18" aria-hidden="true"></span>
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <div class="builder-footer">
+          <p class="privacy-note"><span data-icon="lock" data-icon-size="14" aria-hidden="true"></span>Your code stays in this tab unless you choose to send it to your AI.</p>
+          <div class="footer-links">
+            <button type="button" class="text-link" id="demoLink">See a live demo <span data-icon="arrowUpRight" data-icon-size="13" aria-hidden="true"></span></button>
+            <span class="footer-divider" aria-hidden="true"></span>
+            <span class="no-account-note">No account. No tracking.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="trust-row">
+        <div class="trust-item">
+          <span class="trust-icon" data-icon="eye" data-icon-size="17" aria-hidden="true"></span>
+          <div><strong>Made for understanding</strong><span>Every shape links back to a real line.</span></div>
+        </div>
+        <div class="trust-item">
+          <span class="trust-icon" data-icon="plug" data-icon-size="17" aria-hidden="true"></span>
+          <div><strong>Your AI, your choice</strong><span>OpenAI, DeepSeek, Grok, Claude, or Gemini.</span></div>
+        </div>
+        <div class="trust-item">
+          <span class="trust-icon" data-icon="server" data-icon-size="17" aria-hidden="true"></span>
+          <div><strong>No account needed</strong><span>Run it locally and keep the keys to yourself.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- Studio / results                                                  -->
+    <!-- ================================================================ -->
+    <section class="studio" id="studioView" hidden>
+      <div class="studio-head">
+        <div class="studio-head-left">
+          <button type="button" class="back-button" id="backButton">
+            <span data-icon="arrowLeft" data-icon-size="16" aria-hidden="true"></span>
+            New analysis
+          </button>
+          <span class="studio-divider" aria-hidden="true"></span>
+          <div class="studio-titles">
+            <p class="studio-kicker" id="studioKicker">JAVASCRIPT · FLOWCHART</p>
+            <h1 id="studioTitle">Your code, unpacked.</h1>
+          </div>
+        </div>
+        <div class="studio-actions">
+          <span class="run-chip" id="studioRunChip"><span class="pulse-dot" aria-hidden="true"></span>Local analysis</span>
+          <button type="button" class="button button--ghost button--sm" id="copyGuideButton">
+            <span data-icon="copy" data-icon-size="15" aria-hidden="true"></span>Copy guide
+          </button>
+          <div class="menu-wrap">
+            <button type="button" class="button button--ghost button--sm" id="exportButton" aria-haspopup="menu" aria-expanded="false">
+              <span data-icon="download" data-icon-size="15" aria-hidden="true"></span>Export
+              <span data-icon="chevronDown" data-icon-size="13" aria-hidden="true"></span>
+            </button>
+            <div class="dropdown-menu" id="exportMenu" role="menu" hidden>
+              <button type="button" data-export="markdown" role="menuitem"><span data-icon="book" data-icon-size="15"></span>Guide as Markdown</button>
+              <button type="button" data-export="json" role="menuitem"><span data-icon="code" data-icon-size="15"></span>Analysis as JSON</button>
+              <button type="button" data-export="prompt" role="menuitem"><span data-icon="sparkles" data-icon-size="15"></span>Copy portable AI prompt</button>
+            </div>
+          </div>
+          <button type="button" class="button button--primary button--sm" id="editCodeButton">
+            <span data-icon="code" data-icon-size="15" aria-hidden="true"></span>Edit code
+          </button>
+        </div>
+      </div>
+
+      <div class="workbench">
+        <aside class="panel source-panel">
+          <div class="source-head">
+            <div>
+              <p class="panel-kicker">Source</p>
+              <div class="source-file-row">
+                <span class="source-file-dot" aria-hidden="true"></span>
+                <h2 id="sourceFile">main.js</h2>
+              </div>
+            </div>
+            <button type="button" class="icon-button icon-button--inverse" id="sourceEditButton" aria-label="Edit code" title="Edit code">
+              <span data-icon="sliders" data-icon-size="16"></span>
+            </button>
+          </div>
+          <div class="source-meta">
+            <span id="sourceLanguage">JavaScript</span>
+            <span class="meta-dot" aria-hidden="true"></span>
+            <span id="sourceCount">15 lines</span>
+          </div>
+          <div class="source-scroller" id="sourceScroller">
+            <div class="source-code" id="sourceCode" aria-label="Read-only source code"></div>
+          </div>
+          <div class="source-foot">
+            <span class="source-foot-icon" data-icon="eye" data-icon-size="14" aria-hidden="true"></span>
+            <span>Click a line or a diagram shape to link them.</span>
+          </div>
+        </aside>
+
+        <section class="panel viz-panel">
+          <div class="viz-tabs" id="vizTabs" role="tablist" aria-label="Visualization style">
+            <button type="button" class="viz-tab" data-mode="flow" role="tab"><span data-icon="flow" data-icon-size="16"></span><span>Flowchart</span></button>
+            <button type="button" class="viz-tab" data-mode="tree" role="tab"><span data-icon="tree" data-icon-size="16"></span><span>Syntax Tree</span></button>
+            <button type="button" class="viz-tab" data-mode="trace" role="tab"><span data-icon="trace" data-icon-size="16"></span><span>Live Trace</span></button>
+            <button type="button" class="viz-tab" data-mode="data" role="tab"><span data-icon="data" data-icon-size="16"></span><span>Data Flow</span></button>
+          </div>
+          <div class="viz-toolbar">
+            <div class="viz-toolbar-copy">
+              <p class="viz-kicker" id="vizKicker">Follow the path</p>
+              <div class="viz-title-row">
+                <h2 id="vizTitle">Flowchart</h2>
+                <span class="viz-context" id="vizContext" hidden></span>
+              </div>
+              <p class="viz-subtitle" id="vizSubtitle">Trace the route your program takes.</p>
+            </div>
+            <div class="viz-controls" id="vizControls"></div>
+          </div>
+          <div class="viz-stage" id="vizStage"></div>
+          <div class="viz-footer" id="vizFooter"></div>
+        </section>
+
+        <aside class="panel guide-panel">
+          <div class="guide-head">
+            <div class="guide-head-top">
+              <p class="panel-kicker">Explained simply</p>
+              <span class="guide-badge" id="guideBadge"><span class="badge-dot"></span>Local guide</span>
+            </div>
+            <div class="guide-title-row">
+              <h2>Beginner’s guide</h2>
+              <span class="reading-time" id="guideReadingTime">≈ 2 min read</span>
+            </div>
+            <p class="guide-head-sub" id="guideHeadSub">No jargon. Built from the program you just analyzed.</p>
+          </div>
+
+          <div class="ai-strip" id="aiStrip" aria-live="polite"></div>
+
+          <div class="guide-tabs" id="guideTabs" role="tablist" aria-label="Guide sections">
+            <button type="button" class="guide-tab is-active" data-guide-tab="overview" role="tab" aria-selected="true">Overview</button>
+            <button type="button" class="guide-tab" data-guide-tab="walkthrough" role="tab" aria-selected="false">Walkthrough</button>
+            <button type="button" class="guide-tab" data-guide-tab="lines" role="tab" aria-selected="false">Line by line</button>
+            <button type="button" class="guide-tab" data-guide-tab="concepts" role="tab" aria-selected="false">Concepts</button>
+          </div>
+          <div class="guide-scroller" id="guideScroller">
+            <div class="guide-content" id="guideContent"></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root" aria-live="polite" aria-atomic="false"></div>
+
+  <noscript>
+    <div class="noscript">Prism needs JavaScript enabled to analyze and draw your code.</div>
+  </noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

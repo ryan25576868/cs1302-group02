@@ -1,0 +1,4 @@
+﻿nodeLinker: hoisted
+shamefullyHoist: true
+minimumReleaseAgeExclude:
+  - electron@45.3.2
