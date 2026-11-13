@@ -40,16 +40,19 @@ function-pov ui
 ```
 
 Then open [http://127.0.0.1:8765](http://127.0.0.1:8765). Choose a project
-folder or individual `.py` files in the browser. The interface displays an
-interactive call graph and details for the selected function. You can drag
-function nodes, pan and zoom the graph, and open connected functions from the
-details panel. The UI assets are included in the Python package and work without
-external JavaScript or font services.
+folder, individual `.py` files, or use **Paste code** to analyze a single
+Python source snippet without saving it as a file. The interface displays an
+interactive call graph and beginner-friendly, AST-based function details. A
+single pasted file cannot resolve imports from other project files. You can
+drag function nodes, pan and zoom the graph, and open connected functions from
+the details panel. The UI assets are included in the Python package and work
+without external JavaScript or font services.
 
-Selected source text is sent to the local server for AST parsing. The server
-stores it temporarily and does not import or execute it. The default server
-binds only to `127.0.0.1`; uploaded source is limited to 400 files, 2 MB per
-file, and 8 MB total.
+Selected folder and file uploads are staged in a temporary directory for AST
+parsing. Pasted source is analyzed entirely in memory and is never written to
+disk. Neither workflow imports or executes the submitted Python. The default
+server binds only to `127.0.0.1`; uploads support up to 400 files, 2 MB per
+file, and 8 MB total, while pasted source is limited to 2 MB.
 
 ### Be the Function
 
@@ -73,6 +76,11 @@ an explanation.
 Call depth, AST size, integer/exponent size, and simulation steps are bounded.
 The interpreter evaluates a deliberately small set of AST nodes; it never
 uses `eval` or `exec` and never imports or executes uploaded code.
+
+The **Explain function** panel uses function docstrings, signatures, return
+expressions, and statically resolved project-local calls. These are source-code
+facts, not runtime results; when the code does not document a function's
+purpose, the panel says so rather than guessing.
 
 ## Tests
 

@@ -11,9 +11,15 @@ from pathlib import Path, PurePosixPath
 from typing import Dict, List, Tuple
 from urllib.parse import urlsplit
 
-from .analyzer import analyze_project
+from .analyzer import analyze_project, analyze_source
 from .graph import build_function_graph
-from .pov.engine import PovSimulation, SimulationError, build_simulation
+from .models import AnalysisResult
+from .pov.engine import (
+    PovSimulation,
+    SimulationError,
+    build_simulation,
+    build_simulation_from_source,
+)
 
 MAX_FILES = 400
 MAX_FILE_BYTES = 2 * 1024 * 1024
@@ -63,7 +69,9 @@ class FunctionPovRequestHandler(BaseHTTPRequestHandler):
         route = urlsplit(self.path).path
         allowed_routes = {
             "/api/analyze",
+            "/api/analyze-source",
             "/api/pov/start",
+            "/api/pov/start-source",
             "/api/pov/check",
             "/api/pov/hint",
             "/api/pov/answer",
@@ -84,6 +92,55 @@ class FunctionPovRequestHandler(BaseHTTPRequestHandler):
 
         payload = self._read_json_body()
         if payload is INVALID_JSON_BODY:
+            return
+        if route == "/api/analyze-source":
+            try:
+                source = _validate_source(payload)
+                result = analyze_source(source)
+            except ValueError as error:
+                self._send_json(400, {"error": str(error)})
+                return
+            syntax_errors = [item for item in result.diagnostics if item.severity == "error"]
+            if syntax_errors:
+                diagnostic = syntax_errors[0]
+                location = " on line {}".format(diagnostic.line) if diagnostic.line else ""
+                self._send_json(
+                    400,
+                    {
+                        "error": "Python syntax error{}: {}. Check indentation, brackets, "
+                        "and colons, then try again.".format(location, diagnostic.message)
+                    },
+                )
+                return
+            self._send_json(200, _analysis_payload(result))
+            return
+        if route == "/api/pov/start-source":
+            try:
+                source = _validate_source(payload)
+            except ValueError as error:
+                self._send_json(400, {"error": str(error)})
+                return
+            function_id = payload.get("function_id") if isinstance(payload, dict) else None
+            arguments = payload.get("arguments", {}) if isinstance(payload, dict) else {}
+            if not isinstance(function_id, str) or not isinstance(arguments, dict):
+                self._send_json(
+                    400,
+                    {"error": 'POV start requires a "function_id" and an "arguments" object.'},
+                )
+                return
+            try:
+                simulation = build_simulation_from_source(source, function_id, arguments)
+            except (OSError, ValueError, SimulationError) as error:
+                self._send_json(400, {"error": str(error)})
+                return
+            session_id = str(uuid.uuid4())
+            with POV_SESSIONS_LOCK:
+                POV_SESSIONS[session_id] = simulation
+                while len(POV_SESSIONS) > MAX_POV_SESSIONS:
+                    POV_SESSIONS.popitem(last=False)
+            response = simulation.public_dict()
+            response["session_id"] = session_id
+            self._send_json(200, response)
             return
         try:
             files = _validate_files(payload)
@@ -120,16 +177,7 @@ class FunctionPovRequestHandler(BaseHTTPRequestHandler):
         except (OSError, ValueError) as error:
             self._send_json(400, {"error": str(error)})
             return
-        graph = build_function_graph(result)
-        self._send_json(
-            200,
-            {
-                "functions": [asdict(function) for function in result.functions],
-                "calls": [asdict(call) for call in result.calls],
-                "graph": graph.to_dict(),
-                "diagnostics": [asdict(diagnostic) for diagnostic in result.diagnostics],
-            },
-        )
+        self._send_json(200, _analysis_payload(result))
 
     def _read_json_body(self) -> object:
         content_length = self.headers.get("Content-Length")
@@ -236,6 +284,25 @@ def _validate_files(payload: object) -> List[Tuple[str, str]]:
     if total_bytes > MAX_TOTAL_SOURCE_BYTES:
         raise ValueError("The uploaded source exceeds the 8 MB total limit.")
     return validated
+
+
+def _validate_source(payload: object) -> str:
+    if not isinstance(payload, dict) or not isinstance(payload.get("source"), str):
+        raise ValueError('Request body must contain a "source" string.')
+    source = payload["source"]
+    if len(source.encode("utf-8")) > MAX_FILE_BYTES:
+        raise ValueError("Pasted code exceeds the 2 MB source limit.")
+    return source
+
+
+def _analysis_payload(result: AnalysisResult) -> Dict[str, object]:
+    graph = build_function_graph(result)
+    return {
+        "functions": [asdict(function) for function in result.functions],
+        "calls": [asdict(call) for call in result.calls],
+        "graph": graph.to_dict(),
+        "diagnostics": [asdict(diagnostic) for diagnostic in result.diagnostics],
+    }
 
 
 def _analyze_uploaded_files(files: List[Tuple[str, str]]):

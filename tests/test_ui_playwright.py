@@ -62,6 +62,77 @@ class FunctionGraphBrowserTests(unittest.TestCase):
         if hasattr(self, "temporary_directory"):
             self.temporary_directory.cleanup()
 
+    def test_paste_code_maps_functions_explains_them_and_enters_pov(self):
+        self.page.get_by_role("button", name="Paste code").first.click()
+        self.assertTrue(self.page.locator("#paste-modal").is_visible())
+        self.page.locator("#paste-source").fill("temporary text")
+        self.page.get_by_role("button", name="Clear").click()
+        self.assertEqual(self.page.locator("#paste-source").input_value(), "")
+        self.page.get_by_role("button", name="Cancel").click()
+        self.assertTrue(self.page.locator("#paste-modal").is_hidden())
+
+        self.page.get_by_role("button", name="Paste code").first.click()
+        self.page.locator("#paste-source").fill(
+            "def double(value: int):\n"
+            '    """Return twice the value."""\n'
+            "    return value * 2\n"
+            "\n"
+            "def total(value=3):\n"
+            "    return double(value) + 1\n"
+        )
+        self.page.get_by_role("button", name="Generate map").click()
+        self.page.locator('[data-id="pasted.total"]').wait_for()
+        self.assertEqual(self.page.locator(".node-group").count(), 2)
+        self.assertIn("single file", self.page.locator("#project-label").inner_text())
+        self.assertIn("imports may not resolve", self.page.locator("#project-label").inner_text())
+
+        self.page.locator('[data-id="pasted.total"]').click()
+        explanation = self.page.locator("#function-explanation").inner_text()
+        self.assertIn("optional; default: 3", explanation)
+        self.assertIn("Calls double", explanation)
+        self.assertIn("runtime results have not been executed", explanation)
+        self.assertIn("imports from other project files may not resolve", explanation)
+
+        self.page.locator("#enter-pov").click()
+        self.page.get_by_role("button", name="Enter POV").last.click()
+        self.page.locator("#pov-overlay:not([hidden])").wait_for()
+        self.assertEqual(self.page.locator("#pov-code-file").inner_text(), "pasted.py")
+        self.assertIn("def total(value=3):", self.page.locator("#pov-source").inner_text())
+
+    def test_paste_code_shows_friendly_syntax_and_no_function_messages(self):
+        self.page.get_by_role("button", name="Paste code").first.click()
+        self.page.locator("#paste-source").fill("def broken(:\n    pass\n")
+        self.page.get_by_role("button", name="Generate map").click()
+        self.page.locator("#paste-error:not([hidden])").wait_for()
+        self.assertIn("Python syntax error on line 1", self.page.locator("#paste-error").inner_text())
+        self.assertTrue(self.page.locator("#paste-modal").is_visible())
+
+        self.page.get_by_role("button", name="Clear").click()
+        self.page.locator("#paste-source").fill("answer = 42\n")
+        self.page.get_by_role("button", name="Generate map").click()
+        self.page.locator("#paste-modal[hidden]").wait_for(state="hidden")
+        self.page.get_by_text("0 functions · 0 connections").wait_for()
+        self.assertEqual(self.page.locator(".node-group").count(), 0)
+        self.assertEqual(self.page.locator("#graph-empty .empty-title").inner_text(), "No functions found")
+        self.assertIn("no top-level function definitions", self.page.locator("#graph-empty").inner_text())
+
+    def test_paste_code_explains_that_a_stale_server_must_be_restarted(self):
+        def not_found(route):
+            route.fulfill(
+                status=404,
+                content_type="application/json",
+                body='{"error":"Not found"}',
+            )
+
+        self.page.route("**/api/analyze-source", not_found)
+        self.page.get_by_role("button", name="Paste code").first.click()
+        self.page.locator("#paste-source").fill("def add(a, b):\n    return a + b\n")
+        self.page.get_by_role("button", name="Generate map").click()
+        self.page.locator("#paste-error:not([hidden])").wait_for()
+
+        self.assertIn("server is out of date", self.page.locator("#paste-error").inner_text())
+        self.assertIn("Restart it, then reload", self.page.locator("#paste-error").inner_text())
+
     def test_mouse_click_selects_node_and_drag_pan_zoom_remain_independent(self):
         start_node = self.page.locator('[data-id$=".start"]')
         node_box = start_node.bounding_box()

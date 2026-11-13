@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from ..analyzer import analyze_project
-from ..models import FunctionInfo
+from ..analyzer import analyze_project, analyze_source
+from ..models import AnalysisResult, FunctionInfo
 
 MAX_CALL_DEPTH = 8
 MAX_STEPS = 120
@@ -39,6 +39,18 @@ class _Frame:
 @dataclass(frozen=True)
 class _ReturnFlow:
     value: Any
+
+
+def _function_body(function: _Function) -> Sequence[ast.stmt]:
+    body = function.node.body
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        return body[1:]
+    return body
 
 
 @dataclass
@@ -128,11 +140,47 @@ def build_simulation(
     root = Path(project_root).resolve()
     analysis = analyze_project(str(root))
     infos = {function.id: function for function in analysis.functions}
+    if function_id not in infos:
+        raise SimulationError("That function was not found in the analyzed project.")
+    return _build_simulation(
+        analysis,
+        _load_functions(root, infos),
+        function_id,
+        arguments,
+    )
+
+
+def build_simulation_from_source(
+    source: str,
+    function_id: str,
+    arguments: Optional[Dict[str, Any]] = None,
+    filename: str = "pasted.py",
+) -> PovSimulation:
+    """Create a POV trace from virtual source without writing it to disk."""
+    analysis = analyze_source(source, filename)
+    syntax_errors = [item for item in analysis.diagnostics if item.severity == "error"]
+    if syntax_errors:
+        diagnostic = syntax_errors[0]
+        location = " on line {}".format(diagnostic.line) if diagnostic.line else ""
+        raise SimulationError(
+            "Cannot simulate pasted Python{}: {}".format(location, diagnostic.message)
+        )
+    infos = {function.id: function for function in analysis.functions}
+    functions = _load_functions_from_sources({filename: source}, infos)
+    return _build_simulation(analysis, functions, function_id, arguments)
+
+
+def _build_simulation(
+    analysis: AnalysisResult,
+    functions: Dict[str, _Function],
+    function_id: str,
+    arguments: Optional[Dict[str, Any]],
+) -> PovSimulation:
+    infos = {function.id: function for function in analysis.functions}
     selected = infos.get(function_id)
     if selected is None:
         raise SimulationError("That function was not found in the analyzed project.")
 
-    functions = _load_functions(root, infos)
     calls = {
         (call.caller, call.line, call.expression): call.callee
         for call in analysis.calls
@@ -152,6 +200,31 @@ def _load_functions(root: Path, infos: Dict[str, FunctionInfo]) -> Dict[str, _Fu
         source = (root / relative).read_text(encoding="utf-8")
         try:
             tree = ast.parse(source, filename=relative)
+        except SyntaxError as error:
+            raise SimulationError(
+                "Cannot simulate {}: {}".format(relative, error.msg)
+            ) from error
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef):
+                function_id = "{}.{}".format(file_infos[0].module, node.name)
+                info = next((item for item in file_infos if item.id == function_id), None)
+                if info is not None:
+                    functions[function_id] = _Function(info, node)
+    return functions
+
+
+def _load_functions_from_sources(
+    sources: Dict[str, str],
+    infos: Dict[str, FunctionInfo],
+) -> Dict[str, _Function]:
+    by_file: Dict[str, List[FunctionInfo]] = {}
+    for info in infos.values():
+        by_file.setdefault(info.file, []).append(info)
+
+    functions: Dict[str, _Function] = {}
+    for relative, file_infos in by_file.items():
+        try:
+            tree = ast.parse(sources[relative], filename=relative)
         except SyntaxError as error:
             raise SimulationError(
                 "Cannot simulate {}: {}".format(relative, error.msg)
@@ -261,7 +334,7 @@ class _SimulationBuilder:
         for default in arguments.defaults:
             self._validate_default(default, function)
             self._validate_expr(default, function)
-        self._validate_statements(node.body, function, seen)
+        self._validate_statements(_function_body(function), function, seen)
 
     def _validate_statements(
         self,
@@ -491,7 +564,7 @@ class _SimulationBuilder:
             )
         )
         try:
-            flow = self._execute_statements(function.node.body, frame)
+            flow = self._execute_statements(_function_body(function), frame)
         finally:
             self.frames.pop()
         return flow.value if flow is not None else None

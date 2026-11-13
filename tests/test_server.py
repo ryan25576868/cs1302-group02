@@ -62,6 +62,64 @@ class WebServerTests(unittest.TestCase):
             )
             self.assertFalse(marker.exists())
 
+    def test_analyzes_pasted_source_in_memory_without_executing_it(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            marker = Path(temporary_directory) / "pasted-code-ran"
+            source = (
+                "from pathlib import Path\n"
+                "def unsafe():\n"
+                "    Path({!r}).write_text('executed')\n"
+                "def double(value):\n"
+                "    return value * 2\n"
+                "def total(value):\n"
+                "    return double(value) + 1\n"
+            ).format(str(marker))
+
+            response = self.post("/api/analyze-source", {"source": source})
+
+            self.assertEqual(
+                [function["id"] for function in response["functions"]],
+                ["pasted.unsafe", "pasted.double", "pasted.total"],
+            )
+            self.assertEqual(
+                [(edge["source"], edge["target"]) for edge in response["graph"]["edges"]],
+                [("pasted.total", "pasted.double")],
+            )
+            self.assertFalse(marker.exists())
+
+    def test_pasted_source_reports_syntax_errors_and_no_function_definitions(self):
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            self.post("/api/analyze-source", {"source": "def broken(:\n    pass\n"})
+        self.assertEqual(error.exception.code, 400)
+        message = json.loads(error.exception.read().decode("utf-8"))["error"]
+        self.assertIn("Python syntax error on line 1", message)
+
+        result = self.post("/api/analyze-source", {"source": "answer = 42\n"})
+        self.assertEqual(result["functions"], [])
+        self.assertEqual(result["graph"]["nodes"], [])
+
+    def test_pasted_function_can_enter_pov_without_temporary_files(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            marker = Path(temporary_directory) / "pasted-pov-ran"
+            source = (
+                "from pathlib import Path\n"
+                "Path({!r}).write_text('executed')\n"
+                "def double(value):\n"
+                "    return value * 2\n"
+                "def total(value=3):\n"
+                "    return double(value) + 1\n"
+            ).format(str(marker))
+
+            session = self.post(
+                "/api/pov/start-source",
+                {"source": source, "function_id": "pasted.total", "arguments": {}},
+            )
+
+            self.assertEqual(session["steps"][0]["function_name"], "total")
+            self.assertEqual(session["steps"][0]["variables"], {"value": 3})
+            self.assertEqual(session["sources"]["pasted.total"]["file"], "pasted.py")
+            self.assertFalse(marker.exists())
+
     def test_pov_api_checks_answers_and_reveals_hints_and_answers(self):
         source = (
             "def square(value):\n"

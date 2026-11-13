@@ -3,9 +3,45 @@ import unittest
 from pathlib import Path
 
 from function_pov import analyze_project
+from function_pov.analyzer import analyze_source
 
 
 class AnalyzeProjectTests(unittest.TestCase):
+    def test_analyzes_virtual_source_and_extracts_docstrings_without_writing_files(self):
+        source = (
+            '"""Temporary source is only parsed."""\n'
+            "def double(value: int):\n"
+            '    """Return twice the value."""\n'
+            "    return value * 2\n"
+            "\n"
+            "def total(value=3):\n"
+            "    return double(value) + 1\n"
+        )
+
+        result = analyze_source(source)
+
+        self.assertEqual(result.root, "<memory>")
+        self.assertEqual(
+            [function.id for function in result.functions],
+            ["pasted.double", "pasted.total"],
+        )
+        self.assertEqual(result.functions[0].docstring, "Return twice the value.")
+        self.assertEqual(
+            [(call.caller, call.callee) for call in result.calls],
+            [("pasted.total", "pasted.double")],
+        )
+        self.assertFalse(Path("pasted.py").exists())
+
+    def test_virtual_source_reports_syntax_errors_and_no_function_input(self):
+        invalid = analyze_source("def broken(:\n    pass\n")
+        empty = analyze_source("answer = 42\n")
+
+        self.assertEqual(invalid.functions, ())
+        self.assertEqual(invalid.diagnostics[0].severity, "error")
+        self.assertEqual(invalid.diagnostics[0].line, 1)
+        self.assertEqual(empty.functions, ())
+        self.assertEqual(empty.calls, ())
+
     def test_extracts_functions_parameters_returns_and_imported_calls(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

@@ -18,6 +18,7 @@
         </a>
         <div class="topbar-meta"><span class="local-indicator"></span> LOCAL ANALYSIS <span class="meta-divider"></span> AST ENGINE</div>
         <div class="topbar-actions">
+          <button class="button button-secondary" id="paste-code-top" type="button">Paste code</button>
           <button class="button button-secondary" id="open-files-top" type="button">Files</button>
           <button class="button button-primary topbar-open" id="open-project-top" type="button">
             <span aria-hidden="true">＋</span> Open folder
@@ -64,6 +65,7 @@
               <p class="empty-title">Your code, mapped.</p>
               <p class="empty-copy">Open a Python folder or choose individual files to see how your functions connect.</p>
               <button class="button button-primary" id="open-project-empty" type="button">Choose a folder</button>
+              <button class="button button-secondary empty-paste-button" id="paste-code-empty" type="button">Paste code</button>
               <button class="text-button" id="open-files-empty" type="button">or select individual .py files</button>
               <span class="empty-footnote">Source is analyzed locally and never executed.</span>
             </div>
@@ -101,23 +103,27 @@
               </button>
             </div>
             <div class="detail-scroll">
+              <section class="detail-section explanation-section">
+                <div class="section-title"><span>01</span> EXPLAIN FUNCTION</div>
+                <div class="function-explanation" id="function-explanation"></div>
+              </section>
               <section class="detail-section">
-                <div class="section-title"><span>01</span> PARAMETERS <span class="section-count" id="parameter-count">0</span></div>
+                <div class="section-title"><span>02</span> PARAMETERS <span class="section-count" id="parameter-count">0</span></div>
                 <div class="parameter-list" id="parameter-list"></div>
               </section>
               <section class="detail-section">
-                <div class="section-title"><span>02</span> SOURCE CODE</div>
+                <div class="section-title"><span>03</span> SOURCE CODE</div>
                 <div class="code-window">
                   <div class="code-toolbar"><span class="code-dot"></span><span id="code-file"></span><span class="code-language">PY</span></div>
                   <pre class="source-code"><code id="source-code"></code></pre>
                 </div>
               </section>
               <section class="detail-section">
-                <div class="section-title"><span>03</span> RETURNS</div>
+                <div class="section-title"><span>04</span> RETURNS</div>
                 <div class="return-list" id="return-list"></div>
               </section>
               <section class="detail-section connections-section">
-                <div class="section-title"><span>04</span> CONNECTIONS</div>
+                <div class="section-title"><span>05</span> CONNECTIONS</div>
                 <div class="connection-group"><span class="connection-label">CALLS</span><div id="calls-list"></div></div>
                 <div class="connection-group"><span class="connection-label">CALLED BY</span><div id="called-by-list"></div></div>
               </section>
@@ -130,6 +136,27 @@
         <div class="status-left"><span class="status-dot"></span><span id="status-message">Ready when you are</span></div>
         <span class="status-right">FUNCTION POV <span>·</span> LOCAL WORKSPACE</span>
       </footer>
+    </div>
+    <div class="paste-modal" id="paste-modal" hidden>
+      <form class="paste-card" id="paste-code-form" role="dialog" aria-modal="true" aria-labelledby="paste-code-title">
+        <div class="paste-heading">
+          <div>
+            <p class="eyebrow">QUICK START</p>
+            <h2 id="paste-code-title">Paste Python code</h2>
+          </div>
+          <button class="icon-button" id="paste-code-close" type="button" aria-label="Close">×</button>
+        </div>
+        <label class="paste-label" for="paste-source">Python source</label>
+        <textarea id="paste-source" name="source" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="def greet(name):&#10;    return &quot;Hello, &quot; + name" aria-describedby="paste-code-help"></textarea>
+        <p class="paste-help" id="paste-code-help">Your code is parsed locally and never executed or saved to a file. A single pasted file cannot resolve imports from other project files.</p>
+        <p class="paste-error" id="paste-error" role="alert" hidden></p>
+        <div class="paste-actions">
+          <button class="button button-secondary" id="paste-code-clear" type="button">Clear</button>
+          <span class="paste-action-spacer"></span>
+          <button class="button button-secondary" id="paste-code-cancel" type="button">Cancel</button>
+          <button class="button button-primary" id="paste-code-generate" type="submit">Generate map</button>
+        </div>
+      </form>
     </div>
     <div class="pov-launcher" id="pov-launcher" hidden>
       <form class="launch-card" id="pov-launch-form">

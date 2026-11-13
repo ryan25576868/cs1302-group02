@@ -17,6 +17,7 @@
     pointer: null,
     suppressClick: false,
     sourceFiles: [],
+    sourceMode: "files",
     pov: null,
     toastTimer: null
   };
@@ -25,6 +26,16 @@
   $("#open-project-empty").addEventListener("click", () => folderInput.click());
   $("#open-files-top").addEventListener("click", () => filesInput.click());
   $("#open-files-empty").addEventListener("click", () => filesInput.click());
+  $("#paste-code-top").addEventListener("click", openPasteModal);
+  $("#paste-code-empty").addEventListener("click", openPasteModal);
+  $("#paste-code-form").addEventListener("submit", analyzePastedCode);
+  $("#paste-code-clear").addEventListener("click", () => {
+    $("#paste-source").value = "";
+    $("#paste-error").hidden = true;
+    $("#paste-source").focus();
+  });
+  $("#paste-code-cancel").addEventListener("click", closePasteModal);
+  $("#paste-code-close").addEventListener("click", closePasteModal);
   folderInput.addEventListener("change", () => {
     analyzeFiles(folderInput.files);
     folderInput.value = "";
@@ -97,30 +108,88 @@
       if (!response.ok) {
         throw new Error(result.error || "The project could not be analyzed.");
       }
-      state.data = result;
-      state.sourceFiles = sourceFiles;
-      state.selectedId = null;
-      state.positions = layoutNodes(result.graph.nodes);
-      state.scale = 1;
-      state.panX = 0;
-      state.panY = 0;
-      renderGraph();
-      renderDetails(null);
+      showAnalysis(result, sourceFiles, "files");
       updateProjectSummary(files, result);
-      setStatus("Analysis complete · " + result.functions.length + " function" + (result.functions.length === 1 ? "" : "s"));
-      $("#graph-empty").hidden = result.graph.nodes.length > 0;
-      $("#graph-legend").hidden = result.graph.nodes.length === 0;
-      $("#graph-hint").hidden = result.graph.nodes.length === 0;
-      $("#details-empty").hidden = result.graph.nodes.length === 0;
-      $("#details-content").hidden = true;
-      if (result.diagnostics.length) {
-        setStatus("Analysis complete · " + result.diagnostics.length + " note" + (result.diagnostics.length === 1 ? "" : "s"));
-      }
     } catch (error) {
       showError(error.message || "An unexpected error occurred while analyzing this project.");
       setStatus("Analysis failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function openPasteModal() {
+    $("#paste-error").hidden = true;
+    $("#paste-modal").hidden = false;
+    $("#paste-source").focus();
+  }
+
+  function closePasteModal() {
+    $("#paste-modal").hidden = true;
+  }
+
+  async function analyzePastedCode(event) {
+    event.preventDefault();
+    const source = $("#paste-source").value;
+    const submit = $("#paste-code-generate");
+    $("#paste-error").hidden = true;
+    submit.disabled = true;
+    submit.textContent = "Generating…";
+    setLoading(true);
+    setStatus("Reading pasted Python code…");
+    try {
+      const response = await fetch("/api/analyze-source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source })
+      });
+      const result = await response.json();
+      if (!response.ok) throw apiError(response, result, "The pasted code could not be analyzed.");
+      const sourceFiles = [{ path: "pasted.py", content: source }];
+      showAnalysis(result, sourceFiles, "paste");
+      $("#project-label").textContent =
+        "Pasted code · single file; external project imports may not resolve";
+      $("#graph-count").textContent =
+        result.graph.nodes.length + " functions · " + result.graph.edges.length + " connections";
+      closePasteModal();
+    } catch (error) {
+      const message = error.message || "Could not analyze the pasted Python code.";
+      $("#paste-error").textContent = message;
+      $("#paste-error").hidden = false;
+      setStatus("Could not analyze pasted code");
+    } finally {
+      submit.disabled = false;
+      submit.textContent = "Generate map";
+      setLoading(false);
+    }
+  }
+
+  function showAnalysis(result, sourceFiles, sourceMode) {
+    state.data = result;
+    state.sourceFiles = sourceFiles;
+    state.sourceMode = sourceMode;
+    state.selectedId = null;
+    state.positions = layoutNodes(result.graph.nodes);
+    state.scale = 1;
+    state.panX = 0;
+    state.panY = 0;
+    renderGraph();
+    renderDetails(null);
+    setStatus("Analysis complete · " + result.functions.length + " function" + (result.functions.length === 1 ? "" : "s"));
+    $("#graph-empty").hidden = result.graph.nodes.length > 0;
+    $("#graph-legend").hidden = result.graph.nodes.length === 0;
+    $("#graph-hint").hidden = result.graph.nodes.length === 0;
+    $("#details-empty").hidden = result.graph.nodes.length > 0;
+    $("#details-content").hidden = true;
+    const noFunctions = sourceMode === "paste" && result.graph.nodes.length === 0;
+    $("#graph-empty .empty-title").textContent = noFunctions
+      ? "No functions found"
+      : "Your code, mapped.";
+    $("#graph-empty .empty-copy").textContent = noFunctions
+      ? "This code has no top-level function definitions to map. Add a def function_name(...): block and generate the map again."
+      : "Open a Python folder or choose individual files to see how your functions connect.";
+    if (result.diagnostics.length) {
+      setStatus("Analysis complete · " + result.diagnostics.length + " note" + (result.diagnostics.length === 1 ? "" : "s"));
     }
   }
 
@@ -277,6 +346,7 @@
     $("#detail-location").textContent = fn.file + ":" + fn.line;
     $("#code-file").textContent = fn.file;
     $("#source-code").textContent = fn.source || "";
+    renderFunctionExplanation(fn);
 
     const parameters = $("#parameter-list");
     parameters.replaceChildren();
@@ -327,6 +397,77 @@
     const notice = $("#diagnostics-notice");
     notice.hidden = relevant.length === 0;
     notice.textContent = relevant.map((item) => (item.line ? "Line " + item.line + ": " : "") + item.message).join(" ");
+  }
+
+  function renderFunctionExplanation(fn) {
+    const container = $("#function-explanation");
+    container.replaceChildren();
+    const calls = Array.from(new Set(
+      state.data.calls.filter((call) => call.caller === fn.id).map((call) => call.callee)
+    ));
+    const callers = Array.from(new Set(
+      state.data.calls.filter((call) => call.callee === fn.id).map((call) => call.caller)
+    ));
+    const purpose = fn.docstring
+      ? "Docstring: " + fn.docstring.split("\n")[0]
+      : "No docstring is available, so the function's purpose cannot be determined reliably from syntax alone.";
+    appendExplanationFact(container, "Purpose", purpose);
+
+    const parameterDescriptions = fn.parameters.map((parameter) => {
+      let description = parameter.name;
+      if (parameter.annotation) description += " (type hint: " + parameter.annotation + ")";
+      if (parameter.kind === "var_positional") {
+        description += " accepts extra positional values";
+      } else if (parameter.kind === "var_keyword") {
+        description += " accepts extra named values";
+      } else {
+        description += parameter.default === null
+          ? " is required"
+          : " is optional; default: " + parameter.default;
+      }
+      return description;
+    });
+    appendExplanationFact(
+      container,
+      "Inputs",
+      parameterDescriptions.length ? parameterDescriptions.join("; ") + "." : "This function has no parameters."
+    );
+    appendExplanationFact(
+      container,
+      "Returns",
+      fn.return_expressions.length
+        ? "The source contains return expression" + (fn.return_expressions.length === 1 ? "" : "s") +
+          ": " + fn.return_expressions.join("; ") + ". These are not evaluated."
+        : "No explicit return expression was found. A runtime return value is not calculated here."
+    );
+    appendExplanationFact(
+      container,
+      "Relationships",
+      (calls.length ? "Calls " + calls.map((id) => id.split(".").pop()).join(", ") : "No project-local function calls were resolved") +
+        (callers.length ? "; called by " + callers.map((id) => id.split(".").pop()).join(", ") : "; no project-local callers were resolved") +
+        "."
+    );
+    const note = document.createElement("p");
+    note.className = "explanation-static-note";
+    note.textContent = "Static reading only: branches and runtime results have not been executed.";
+    container.append(note);
+    if (state.sourceMode === "paste") {
+      const imports = document.createElement("p");
+      imports.className = "explanation-static-note";
+      imports.textContent = "Single-file paste: imports from other project files may not resolve.";
+      container.append(imports);
+    }
+  }
+
+  function appendExplanationFact(container, label, description) {
+    const fact = document.createElement("p");
+    fact.className = "explanation-fact";
+    const heading = document.createElement("strong");
+    heading.textContent = label;
+    const text = document.createElement("span");
+    text.textContent = description;
+    fact.append(heading, text);
+    container.append(fact);
   }
 
   function openPovLauncher() {
@@ -399,17 +540,24 @@
     submit.disabled = true;
     submit.textContent = "Preparing simulation…";
     try {
-      const response = await fetch("/api/pov/start", {
+      const pasted = state.sourceMode === "paste";
+      const response = await fetch(pasted ? "/api/pov/start-source" : "/api/pov/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          files: state.sourceFiles,
-          function_id: state.selectedId,
-          arguments: argumentsByName
-        })
+        body: JSON.stringify(pasted
+          ? {
+            source: state.sourceFiles[0].content,
+            function_id: state.selectedId,
+            arguments: argumentsByName
+          }
+          : {
+            files: state.sourceFiles,
+            function_id: state.selectedId,
+            arguments: argumentsByName
+          })
       });
       const session = await response.json();
-      if (!response.ok) throw new Error(session.error || "Could not start this POV simulation.");
+      if (!response.ok) throw apiError(response, session, "Could not start this POV simulation.");
       state.pov = {
         session,
         index: 0,
@@ -433,6 +581,15 @@
     const error = $("#launch-error");
     error.textContent = message;
     error.hidden = false;
+  }
+
+  function apiError(response, result, fallback) {
+    if (response.status === 404 && result.error === "Not found") {
+      return new Error(
+        "This Function POV server is out of date. Restart it, then reload this page to use pasted code."
+      );
+    }
+    return new Error(result.error || fallback);
   }
 
   function backToMap() {

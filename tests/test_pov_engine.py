@@ -2,7 +2,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from function_pov.pov.engine import SimulationError, build_simulation
+from function_pov.pov.engine import (
+    SimulationError,
+    build_simulation,
+    build_simulation_from_source,
+)
 
 
 class PovEngineTests(unittest.TestCase):
@@ -27,6 +31,17 @@ class PovEngineTests(unittest.TestCase):
         self.assertEqual(entry.kind, "enter")
         self.assertEqual(entry.variables, {"name": "Ada", "suffix": "!"})
         self.assertEqual(simulation.steps[-1].expected, "Ada!")
+
+    def test_simulates_virtual_source_with_a_function_docstring(self):
+        simulation = build_simulation_from_source(
+            'def greet(name="Ada"):\n'
+            '    """Return a greeting."""\n'
+            "    return name\n",
+            "pasted.greet",
+        )
+
+        self.assertEqual(simulation.steps[0].variables, {"name": "Ada"})
+        self.assertEqual(simulation.steps[-1].expected, "Ada")
 
     def test_arithmetic_answers_hints_and_show_answer(self):
         self.write(

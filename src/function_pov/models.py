@@ -21,6 +21,7 @@ class FunctionInfo:
     line: int
     end_line: int
     source: str
+    docstring: Optional[str]
     parameters: Tuple[ParameterInfo, ...]
     return_expressions: Tuple[str, ...]
 

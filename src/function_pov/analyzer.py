@@ -99,6 +99,54 @@ def analyze_project(
             )
         )
 
+    return _analyze_parsed_files(str(root), parsed_files, diagnostics)
+
+
+def analyze_source(source: str, filename: str = "pasted.py") -> AnalysisResult:
+    """Analyze a virtual Python file without writing it to disk."""
+    if not isinstance(source, str):
+        raise TypeError("Python source must be text.")
+    normalized_filename = filename.replace("\\", "/")
+    relative = Path(normalized_filename)
+    if (
+        not filename
+        or relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in normalized_filename.split("/"))
+        or relative.suffix.lower() != ".py"
+    ):
+        raise ValueError("The virtual filename must be a relative Python file path.")
+
+    diagnostics: List[Diagnostic] = []
+    try:
+        tree = ast.parse(source, filename=relative.as_posix())
+    except SyntaxError as error:
+        diagnostics.append(
+            Diagnostic(
+                file=relative.as_posix(),
+                message=error.msg,
+                severity="error",
+                line=error.lineno,
+            )
+        )
+        return _analyze_parsed_files("<memory>", [], diagnostics)
+
+    module = ".".join(relative.with_suffix("").parts)
+    is_package_init = relative.name == "__init__.py"
+    parsed = _ParsedFile(
+        path=relative,
+        module=module,
+        is_package_init=is_package_init,
+        tree=tree,
+        source=source,
+    )
+    return _analyze_parsed_files("<memory>", [parsed], diagnostics)
+
+
+def _analyze_parsed_files(
+    root: str,
+    parsed_files: List[_ParsedFile],
+    diagnostics: List[Diagnostic],
+) -> AnalysisResult:
     functions: List[FunctionInfo] = []
     function_ids: Set[str] = set()
     for parsed in parsed_files:
@@ -130,7 +178,7 @@ def analyze_project(
     functions.sort(key=lambda item: (item.module, item.line, item.name))
     calls = _collect_calls(parsed_files, function_ids)
     return AnalysisResult(
-        root=str(root),
+        root=root,
         functions=tuple(functions),
         calls=tuple(calls),
         diagnostics=tuple(diagnostics),
@@ -178,6 +226,7 @@ def _function_info(parsed: _ParsedFile, node: ast.FunctionDef) -> FunctionInfo:
         line=first_line,
         end_line=node.end_lineno,
         source=source,
+        docstring=ast.get_docstring(node, clean=False),
         parameters=parameters,
         return_expressions=returns,
     )
