@@ -1,0 +1,68 @@
+{
+  "name": "prism-visual-code-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A local-first code visualizer with beginner-friendly explanations and a bring-your-own-AI proxy.",
+  "author": "Prism",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "desktop": "electron .",
+    "desktop:fullscreen": "electron . --fullscreen",
+    "dist:win": "electron-builder --win nsis",
+    "test": "node tests/run-tests.mjs",
+    "test:api": "node tests/api-proxy.test.mjs",
+    "mock:ai": "node tests/mock-provider.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "app.prism.visualizer",
+    "productName": "Prism",
+    "artifactName": "Prism-Setup-${version}.${ext}",
+    "asar": false,
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "assets/**/*",
+      "server.mjs",
+      "desktop/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Prism",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
