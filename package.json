@@ -1,0 +1,17 @@
+{
+  "name": "prism-visual-code-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A local-first code visualizer with beginner-friendly explanations and a bring-your-own-AI proxy.",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "test": "node tests/run-tests.mjs",
+    "test:api": "node tests/api-proxy.test.mjs",
+    "mock:ai": "node tests/mock-provider.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
