@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Prism turns code into clear flowcharts, syntax trees, animated execution traces, and data maps — then explains it in plain English. Bring your own AI.">
+  <meta name="theme-color" content="#1e1e1e">
+  <title>Prism — code analysis workspace</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/ide.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="ambient" aria-hidden="true">
+    <div class="ambient-orb ambient-orb--one"></div>
+    <div class="ambient-orb ambient-orb--two"></div>
+    <div class="ambient-grid"></div>
+  </div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <div class="titlebar-start">
+        <a class="brand" href="#" id="brandLink" aria-label="Prism home">
+          <img class="brand-symbol" id="brandSymbol" src="assets/icon.png" alt="" width="22" height="22" aria-hidden="true">
+          <span class="brand-word">prism</span>
+          <span class="brand-tag">workspace</span>
+        </a>
+        <span class="titlebar-divider" aria-hidden="true"></span>
+        <div class="titlebar-project" title="Current workspace file">
+          <span class="titlebar-project-icon" data-icon="files" data-icon-size="13" aria-hidden="true"></span>
+          <span class="titlebar-project-name">workspace</span>
+          <span class="titlebar-project-sep">/</span>
+          <span class="titlebar-project-file" id="headerProjectFile">Welcome</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="command-center" id="commandButton" type="button" aria-label="Open quick actions">
+          <span data-icon="search" data-icon-size="13" aria-hidden="true"></span>
+          <span class="command-center-label">Actions</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+        <span class="local-status" title="Code is analyzed in this browser tab">
+          <span class="local-status-dot" aria-hidden="true"></span>
+          <span>Local</span>
+        </span>
+        <button class="button button--soft button--sm ai-trigger" id="aiButton" type="button" aria-label="Connect AI">
+          <span data-icon="sparkles" data-icon-size="15" aria-hidden="true"></span>
+          <span data-ai-label>Connect AI</span>
+          <span class="ai-status-dot" id="aiStatusDot" aria-hidden="true" hidden></span>
+        </button>
+        <button class="icon-button" id="themeToggle" type="button" aria-label="Switch to light theme" title="Change theme">
+          <span data-icon="sun" data-icon-size="16" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="activity-bar" id="activityBar" aria-label="Prism workbench views">
+    <div class="activity-group">
+      <button class="activity-item is-active" type="button" data-activity="source" aria-label="Source code" title="Source">
+        <span data-icon="files" data-icon-size="21" aria-hidden="true"></span>
+        <span class="activity-tooltip">Source</span>
+      </button>
+      <button class="activity-item" type="button" data-activity="flow" aria-label="Flowchart view" title="Flowchart">
+        <span data-icon="flow" data-icon-size="21" aria-hidden="true"></span>
+        <span class="activity-tooltip">Flowchart</span>
+      </button>
+      <button class="activity-item" type="button" data-activity="tree" aria-label="Syntax tree view" title="Syntax tree">
+        <span data-icon="tree" data-icon-size="21" aria-hidden="true"></span>
+        <span class="activity-tooltip">Syntax tree</span>
+      </button>
+      <button class="activity-item" type="button" data-activity="trace" aria-label="Live trace view" title="Live trace">
+        <span data-icon="trace" data-icon-size="21" aria-hidden="true"></span>
+        <span class="activity-tooltip">Live trace</span>
+      </button>
+      <button class="activity-item" type="button" data-activity="data" aria-label="Data flow view" title="Data flow">
+        <span data-icon="data" data-icon-size="21" aria-hidden="true"></span>
+        <span class="activity-tooltip">Data flow</span>
+      </button>
+      <button class="activity-item" type="button" data-activity="guide" aria-label="Beginner guide and examples" title="Beginner guide and examples">
+        <span data-icon="book" data-icon-size="21" aria-hidden="true"></span>
+        <span class="activity-tooltip">Guide &amp; examples</span>
+      </button>
+      <button class="activity-item" type="button" data-activity="ai" aria-label="AI settings" title="AI settings">
+        <span data-icon="sparkles" data-icon-size="21" aria-hidden="true"></span>
+        <span class="activity-tooltip">AI settings</span>
+      </button>
+    </div>
+    <div class="activity-group activity-group--bottom">
+      <button class="activity-item" type="button" data-activity="home" aria-label="Back to welcome" title="Welcome">
+        <span data-icon="home" data-icon-size="20" aria-hidden="true"></span>
+        <span class="activity-tooltip">Welcome</span>
+      </button>
+    </div>
+  </nav>
+
+  <main id="main">
+    <!-- ================================================================ -->
+    <!-- Intake / setup                                                    -->
+    <!-- ================================================================ -->
+    <section class="intake is-entering" id="intakeView">
+      <div class="welcome-tabbar">
+        <div class="welcome-tab is-active">
+          <span data-icon="files" data-icon-size="14" aria-hidden="true"></span>
+          Welcome
+        </div>
+        <button type="button" class="welcome-tab welcome-tab--muted" data-new-analysis>
+          <span data-icon="code" data-icon-size="14" aria-hidden="true"></span>
+          Editor
+        </button>
+        <div class="welcome-tabbar-spacer"></div>
+        <span class="welcome-tabbar-meta">Prism workspace · local</span>
+      </div>
+
+      <div class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow"><span data-icon="code" data-icon-size="13" aria-hidden="true"></span>New analysis</p>
+          <h1>Analyze a snippet.</h1>
+          <p class="hero-subtitle">Choose a language and a view. Prism maps the structure, execution, and data flow locally, then writes a plain-English guide beside the result.</p>
+          <div class="hero-notes">
+            <span class="hero-note"><span data-icon="lock" data-icon-size="14" aria-hidden="true"></span>Runs locally</span>
+            <span class="hero-note"><span data-icon="sparkles" data-icon-size="14" aria-hidden="true"></span>AI is optional</span>
+          </div>
+        </div>
+        <div class="hero-aside">
+          <div class="copilot-welcome">
+            <div class="copilot-welcome-head">
+              <span class="copilot-mark" data-icon="book" data-icon-size="17" aria-hidden="true"></span>
+              <div>
+                <strong>What you get</strong>
+                <span>From every analysis</span>
+              </div>
+            </div>
+            <p class="copilot-welcome-copy">A linked set of views and a guide you can read from top to bottom, without switching tools.</p>
+            <ul class="copilot-capabilities">
+              <li><span data-icon="check" data-icon-size="13" aria-hidden="true"></span>Four linked views</li>
+              <li><span data-icon="check" data-icon-size="13" aria-hidden="true"></span>Plain-English explanations</li>
+              <li><span data-icon="check" data-icon-size="13" aria-hidden="true"></span>Concept notes and a quick check</li>
+            </ul>
+            <p class="copilot-foot">No account required. Your code stays on this machine.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="builder">
+        <div class="builder-topbar">
+          <div class="builder-heading">
+            <span class="builder-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span>New analysis</span>
+            <span class="builder-file">blank</span>
+          </div>
+          <div class="builder-runtime"><span class="pulse-dot" aria-hidden="true"></span>Local workspace</div>
+        </div>
+
+        <div class="builder-grid">
+          <div class="setup-column">
+            <section class="setup-step setup-step--language">
+              <header class="step-heading">
+                <span class="step-number">01</span>
+                <div class="step-heading-copy">
+                  <h2>Choose a language</h2>
+                  <p>Pick the syntax for the file you want to work in.</p>
+                </div>
+              </header>
+              <div class="language-grid" id="languageGrid" role="radiogroup" aria-label="Programming language"></div>
+            </section>
+
+            <section class="setup-step setup-step--mode is-locked" id="modeStep">
+              <header class="step-heading">
+                <span class="step-number">02</span>
+                <div class="step-heading-copy">
+                  <h2>Choose a lens</h2>
+                  <p>Same code, a different way to see it.</p>
+                </div>
+              </header>
+              <div class="lens-grid" id="modeGrid" role="radiogroup" aria-label="Visualization style"></div>
+              <p class="locked-hint" id="modeHint"><span data-icon="lock" data-icon-size="13" aria-hidden="true"></span>Pick a language to unlock the lenses.</p>
+            </section>
+          </div>
+
+          <section class="sample-panel import-panel" aria-label="Start a file">
+            <header class="sample-panel-head">
+              <div class="sample-panel-title">
+                <span class="sample-step">03</span>
+                <div>
+                  <p class="panel-kicker">Start a file</p>
+                  <h2 id="documentTitle">Blank document</h2>
+                </div>
+              </div>
+              <span class="sample-language" id="documentLanguage">JavaScript</span>
+            </header>
+            <div class="import-drop" id="importDrop">
+              <span class="import-icon" data-icon="upload" data-icon-size="24" aria-hidden="true"></span>
+              <strong>Import a source file</strong>
+              <p>Drop a code file here, or choose one from your computer.</p>
+              <button type="button" class="button button--soft" id="importFileButton">
+                <span data-icon="files" data-icon-size="14" aria-hidden="true"></span>
+                Choose file
+              </button>
+              <span class="import-formats">JS · TS · Python · Java · C++ · C</span>
+            </div>
+            <footer class="sample-panel-foot">
+              <span class="sample-meta" id="documentMeta">No code yet</span>
+              <button type="button" class="button button--primary" id="openEditorButton">
+                Open code editor
+                <span data-icon="arrowRight" data-icon-size="16" aria-hidden="true"></span>
+              </button>
+            </footer>
+          </section>
+        </div>
+
+      </div>
+
+      <div class="trust-row">
+        <div class="trust-item">
+          <span class="trust-icon" data-icon="eye" data-icon-size="17" aria-hidden="true"></span>
+          <div><strong>Made for understanding</strong><span>Every shape links back to a real line.</span></div>
+        </div>
+        <div class="trust-item">
+          <span class="trust-icon" data-icon="plug" data-icon-size="17" aria-hidden="true"></span>
+          <div><strong>Your AI, your choice</strong><span>OpenAI, DeepSeek, Grok, Claude, or Gemini.</span></div>
+        </div>
+        <div class="trust-item">
+          <span class="trust-icon" data-icon="server" data-icon-size="17" aria-hidden="true"></span>
+          <div><strong>No account needed</strong><span>Run it locally and keep the keys to yourself.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- Editor / add code                                                  -->
+    <!-- ================================================================ -->
+    <section class="editor-page" id="editorView" hidden>
+      <div class="editor-page-head">
+        <button type="button" class="back-button" id="editorBackButton">
+          <span data-icon="arrowLeft" data-icon-size="15" aria-hidden="true"></span>
+          Welcome
+        </button>
+        <span class="studio-divider" aria-hidden="true"></span>
+        <div class="editor-page-breadcrumb">
+          <span>workspace</span>
+          <span class="breadcrumb-sep">/</span>
+          <strong id="editorFileLabel">No file selected</strong>
+        </div>
+        <div class="editor-page-actions">
+          <div class="editor-language-chip" id="editorLanguageChip" hidden>
+            <span class="language-chip-glyph" id="editorLanguageGlyph">JS</span>
+            <span id="editorFileName">main.js</span>
+          </div>
+          <span class="editor-lines" id="editorLines">0 lines</span>
+          <button type="button" class="editor-link" id="importEditorButton">
+            <span data-icon="upload" data-icon-size="14" aria-hidden="true"></span>
+            Import
+          </button>
+          <button type="button" class="editor-link" id="clearEditorButton" disabled>
+            <span data-icon="trash" data-icon-size="14" aria-hidden="true"></span>
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div class="editor-page-tabs">
+        <div class="editor-page-tab is-active">
+          <span data-icon="files" data-icon-size="13" aria-hidden="true"></span>
+          <span id="codePageTabFile">main.js</span>
+          <span class="page-tab-dot" aria-hidden="true"></span>
+          <button type="button" class="page-tab-close" id="editorCloseButton" aria-label="Close editor" title="Back to welcome">
+            <span data-icon="close" data-icon-size="12" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="editor-page-canvas">
+        <div class="code-card" id="codeCard">
+          <div class="editor-mount" id="editorMount"></div>
+        </div>
+      </div>
+
+      <div class="analyze-bar editor-page-actions-bar">
+        <div class="analyze-note">
+          <span class="analyze-note-icon"><span data-icon="sparkles" data-icon-size="15" aria-hidden="true"></span></span>
+          <div>
+            <strong>Four views. One clear explanation.</strong>
+            <span>Flow, structure, execution, and data — all from your code.</span>
+          </div>
+        </div>
+        <button type="button" class="button button--primary button--analyze" id="analyzeButton" disabled>
+          <span class="button-label">Visualize &amp; explain</span>
+          <span class="button-arrow" data-icon="arrowRight" data-icon-size="18" aria-hidden="true"></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- Studio / results                                                  -->
+    <!-- ================================================================ -->
+    <section class="studio" id="studioView" hidden>
+      <div class="studio-head">
+        <div class="studio-head-left">
+          <button type="button" class="back-button" id="backButton">
+            <span data-icon="arrowLeft" data-icon-size="15" aria-hidden="true"></span>
+            Welcome
+          </button>
+          <span class="studio-divider" aria-hidden="true"></span>
+          <div class="studio-titles">
+            <p class="studio-kicker" id="studioKicker">JAVASCRIPT · FLOWCHART</p>
+            <h1 id="studioTitle">Code analysis</h1>
+          </div>
+        </div>
+        <div class="studio-actions">
+          <span class="run-chip" id="studioRunChip"><span class="pulse-dot" aria-hidden="true"></span>Local analysis</span>
+          <button type="button" class="button button--ghost button--sm" id="copyGuideButton">
+            <span data-icon="copy" data-icon-size="15" aria-hidden="true"></span>Copy guide
+          </button>
+          <div class="menu-wrap">
+            <button type="button" class="button button--ghost button--sm" id="exportButton" aria-haspopup="menu" aria-expanded="false">
+              <span data-icon="download" data-icon-size="15" aria-hidden="true"></span>Export
+              <span data-icon="chevronDown" data-icon-size="13" aria-hidden="true"></span>
+            </button>
+            <div class="dropdown-menu" id="exportMenu" role="menu" hidden>
+              <button type="button" data-export="markdown" role="menuitem"><span data-icon="book" data-icon-size="15"></span>Guide as Markdown</button>
+              <button type="button" data-export="json" role="menuitem"><span data-icon="code" data-icon-size="15"></span>Analysis as JSON</button>
+              <button type="button" data-export="prompt" role="menuitem"><span data-icon="sparkles" data-icon-size="15"></span>Copy portable AI prompt</button>
+            </div>
+          </div>
+          <button type="button" class="button button--primary button--sm" id="editCodeButton">
+            <span data-icon="code" data-icon-size="15" aria-hidden="true"></span>Edit code
+          </button>
+        </div>
+      </div>
+
+      <div class="workbench">
+        <aside class="panel source-panel">
+          <div class="source-head">
+            <div>
+              <p class="panel-kicker">Source</p>
+              <div class="source-file-row">
+                <span class="source-file-icon" data-icon="files" data-icon-size="14" aria-hidden="true"></span>
+                <h2 id="sourceFile">main.js</h2>
+                <span class="source-readonly">read-only</span>
+              </div>
+            </div>
+            <button type="button" class="icon-button icon-button--inverse" id="sourceEditButton" aria-label="Edit code" title="Edit code">
+              <span data-icon="sliders" data-icon-size="15"></span>
+            </button>
+          </div>
+          <div class="source-meta">
+            <span id="sourceLanguage">JavaScript</span>
+            <span class="meta-dot" aria-hidden="true"></span>
+            <span id="sourceCount">15 lines</span>
+          </div>
+          <div class="source-scroller" id="sourceScroller">
+            <div class="source-code" id="sourceCode" aria-label="Read-only source code"></div>
+          </div>
+          <div class="source-foot">
+            <span class="source-foot-icon" data-icon="eye" data-icon-size="14" aria-hidden="true"></span>
+            <span>Click a line or a diagram shape to link them.</span>
+          </div>
+        </aside>
+
+        <section class="panel viz-panel">
+          <div class="viz-tabs" id="vizTabs" role="tablist" aria-label="Visualization style">
+            <button type="button" class="viz-tab" data-mode="flow" role="tab"><span data-icon="flow" data-icon-size="16"></span><span>Flowchart</span></button>
+            <button type="button" class="viz-tab" data-mode="tree" role="tab"><span data-icon="tree" data-icon-size="16"></span><span>Syntax Tree</span></button>
+            <button type="button" class="viz-tab" data-mode="trace" role="tab"><span data-icon="trace" data-icon-size="16"></span><span>Live Trace</span></button>
+            <button type="button" class="viz-tab" data-mode="data" role="tab"><span data-icon="data" data-icon-size="16"></span><span>Data Flow</span></button>
+          </div>
+          <div class="editor-breadcrumb" aria-hidden="true">
+            <span data-icon="files" data-icon-size="12"></span>
+            <span id="breadcrumbFile">main.js</span>
+            <span class="breadcrumb-sep">›</span>
+            <span id="breadcrumbMode">Flowchart</span>
+            <span class="breadcrumb-sep">›</span>
+            <span>analysis</span>
+          </div>
+          <div class="viz-toolbar">
+            <div class="viz-toolbar-copy">
+              <p class="viz-kicker" id="vizKicker">Follow the path</p>
+              <div class="viz-title-row">
+                <h2 id="vizTitle">Flowchart</h2>
+                <span class="viz-context" id="vizContext" hidden></span>
+              </div>
+              <p class="viz-subtitle" id="vizSubtitle">Trace the route your program takes.</p>
+            </div>
+            <div class="viz-controls" id="vizControls"></div>
+          </div>
+          <div class="viz-stage" id="vizStage"></div>
+          <div class="viz-footer" id="vizFooter"></div>
+        </section>
+
+        <aside class="panel guide-panel">
+          <div class="guide-head">
+            <div class="guide-head-top">
+              <p class="panel-kicker">Explanation</p>
+              <span class="guide-badge" id="guideBadge"><span class="badge-dot"></span>Local guide</span>
+            </div>
+            <div class="guide-title-row">
+              <h2>Beginner’s guide</h2>
+              <span class="reading-time" id="guideReadingTime">≈ 2 min read</span>
+            </div>
+            <p class="guide-head-sub" id="guideHeadSub">Built from the program you just analyzed.</p>
+          </div>
+
+          <div class="ai-strip" id="aiStrip" aria-live="polite"></div>
+
+          <div class="guide-tabs" id="guideTabs" role="tablist" aria-label="Guide sections">
+            <button type="button" class="guide-tab is-active" data-guide-tab="overview" role="tab" aria-selected="true">Overview</button>
+            <button type="button" class="guide-tab" data-guide-tab="walkthrough" role="tab" aria-selected="false">Walkthrough</button>
+            <button type="button" class="guide-tab" data-guide-tab="lines" role="tab" aria-selected="false">Line by line</button>
+            <button type="button" class="guide-tab" data-guide-tab="concepts" role="tab" aria-selected="false">Concepts</button>
+            <button type="button" class="guide-tab" data-guide-tab="examples" role="tab" aria-selected="false">Examples</button>
+          </div>
+          <div class="guide-scroller" id="guideScroller">
+            <div class="guide-content" id="guideContent"></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="status-bar" id="statusBar">
+    <div class="status-left">
+      <span class="status-item status-branch" title="Local workspace">
+        <span data-icon="server" data-icon-size="12" aria-hidden="true"></span>
+        Local workspace
+      </span>
+      <span class="status-item" id="statusFile">No file</span>
+      <span class="status-item" id="statusMode">Welcome</span>
+    </div>
+    <div class="status-right">
+      <span class="status-item" id="statusAI">AI: not connected</span>
+      <span class="status-item" id="statusLine">Line 1</span>
+      <span class="status-item" id="statusLanguage">Plain Text</span>
+      <span class="status-item status-local">
+        <span data-icon="lock" data-icon-size="12" aria-hidden="true"></span>
+        Local
+      </span>
+    </div>
+  </footer>
+
+  <input id="importFileInput" type="file" accept=".js,.mjs,.cjs,.jsx,.ts,.tsx,.py,.java,.cpp,.cc,.cxx,.h,.hpp,.c,.txt" hidden>
+
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root" aria-live="polite" aria-atomic="false"></div>
+
+  <noscript>
+    <div class="noscript">Prism needs JavaScript enabled to analyze and draw your code.</div>
+  </noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
