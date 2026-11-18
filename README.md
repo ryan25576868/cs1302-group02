@@ -10,9 +10,11 @@ Prism turns a source file into a linked set of views—flow, syntax, execution, 
 
 - **Six languages** — Python, JavaScript, TypeScript, Java, C++, and C.
 - **Four linked views** — Flowchart, Syntax Tree, Live Trace, and Data Flow.
+- **Structural compare** — diff two versions of one file by classes and functions instead of by lines, powered by [structscope](https://pypi.org/project/structscope/).
 - **Beginner's guide** — overview, mental model, step-by-step walkthrough, line-by-line notes, concepts, common mistakes, and a quick check.
 - **Native motion** — page and tab transitions, sequenced flowchart nodes, trace-detail fades, and a drifting welcome illustration.
 - **Optional AI** — add a second explanation with OpenAI-compatible, DeepSeek, Grok, Anthropic, or Gemini. Local analysis needs no AI.
+- **Bilingual interface** — switch between English and 简体中文 from the top bar; the window re-labels itself without a restart.
 - **Local-first** — source code is parsed and simulated in-process. No account, telemetry, or browser tab required.
 - **Source-only** — the project is a Python application, not a web wrapper.
 
@@ -45,6 +47,7 @@ The app opens with a blank document. Choose a language, then:
 - **Open editor** to write code.
 - **Import file** to load a source file.
 - **Try a case** to start from a small example.
+- **Compare versions** to diff two versions of one file by structure.
 
 ## Usage
 
@@ -63,6 +66,65 @@ The app opens with a blank document. Choose a language, then:
 6. Use **Save guide** to export the generated guide as Markdown.
 
 ![Java analysis in Prism](screenshots/native-java.png)
+
+## Interface language
+
+The language box in the top-left of the window switches the interface between
+English and 简体中文. The choice applies immediately — menus, buttons, status
+lines and dialogs are re-labelled in place, with no restart — and is remembered
+for the next launch.
+
+Strings live in `python_app/i18n.py` as one dictionary per language, keyed by the
+English text. Adding a language means adding one dictionary; a test walks the UI
+modules and fails when a `tr(...)` string has no translation, so the table cannot
+silently drift behind the interface. Code-level names (Python, Java, C++) stay
+untranslated on purpose, and the explanation text Prism generates for a program
+remains in English.
+
+## Compare two versions
+
+Prism can diff two versions of the same file by **structure** instead of by
+lines. Open **Compare versions** on the welcome screen, or use
+**Tools → Compare two versions…** (`Ctrl+D`).
+
+1. Pick the language, then choose a *before* file and an *after* file — or
+   press **Sample pair** to load the bundled example for Python or Java.
+2. Press **Compare**.
+3. Read the map: every class, function and method appears twice — once per
+   version — joined by a curve when the two sides matched.
+
+| Colour | Meaning |
+| --- | --- |
+| green | added in the after version |
+| red | removed from the before version |
+| amber | same symbol, changed body or signature |
+| blue | same body, different name (moved) |
+| grey | unchanged |
+
+Card width tracks the number of code lines, and the complexity badge appears
+when a symbol got more or less branching. Hover a card to lift it, light up its
+partner on the other side and dim everything else — the pair you are looking at
+stays readable however crowded the map gets. Click any card to see the two
+excerpts aligned line by line, with added, removed and replaced lines toned
+differently. The filter next to the language box dims everything except one
+status, which makes "what actually changed" readable at a glance.
+
+The diff itself comes from [structscope](https://pypi.org/project/structscope/),
+a small library that matches symbols across two parses. Prism already builds
+the trees, so no second parser is involved: `compare_engine.py` adapts Prism's
+analysis trees into structscope's symbol model.
+
+If `structscope` is not installed the Compare page explains what to run:
+
+```console
+pip install structscope
+```
+
+While working on both projects side by side, install the checkout instead:
+
+```console
+pip install -e ..\structdiff
+```
 
 ## Optional AI
 
@@ -94,6 +156,9 @@ python_app/
   analysis.py            Python AST analysis, safe trace, guide generator
   js_analysis.py         tree-sitter JavaScript/TypeScript analysis and trace
   compiled_analysis.py   tree-sitter Java/C++/C analysis and trace
+  compare.py             Compare page: two-version map and aligned excerpts
+  compare_engine.py      Prism trees -> structscope symbol model, structural diff
+  i18n.py                Interface strings: English source text + translations
   ai.py                  Optional AI provider calls and validation
   launch_native.py       Application entry point
   requirements.txt       PySide6 and tree-sitter grammars
@@ -102,6 +167,9 @@ tests_py/
   test_javascript.py
   test_compiled.py
   test_ai.py
+  test_compare.py
+  test_i18n.py
+samples/                 before/after pairs used by the Compare page
 assets/                  Application icon
 screenshots/             Native app screenshots
 ```
@@ -120,7 +188,7 @@ screenshots/             Native app screenshots
 python -m unittest discover -s tests_py -v
 ```
 
-**15 tests currently pass.** They cover Python, JavaScript, TypeScript, Java, C++, and C analysis; trace output; guide generation; syntax errors; AI settings validation; and empty input.
+**39 tests currently pass.** They cover Python, JavaScript, TypeScript, Java, C++, and C analysis; trace output; guide generation; syntax errors; AI settings validation; empty input; the structural compare engine (model mapping, statuses, renames, line alignment); and the interface strings, including a coverage test that fails when a `tr(...)` string has no translation.
 
 ## Troubleshooting
 

@@ -39,11 +39,15 @@ try:
     from python_app.analysis import analyze_python
     from python_app.js_analysis import analyze_javascript
     from python_app.compiled_analysis import analyze_compiled
+    from python_app.compare import ComparePage
+    from python_app.i18n import LANGUAGES as UI_LANGUAGES, set_language as _apply_ui_language, tr
 except ImportError:  # running the file directly
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from python_app.analysis import analyze_python
     from python_app.js_analysis import analyze_javascript
     from python_app.compiled_analysis import analyze_compiled
+    from python_app.compare import ComparePage
+    from python_app.i18n import LANGUAGES as UI_LANGUAGES, set_language as _apply_ui_language, tr
 
 APP_NAME = "Prism"
 APP_TAGLINE = "Code, made clear."
@@ -853,13 +857,16 @@ class WelcomePage(QWidget):
         intro_row.setSpacing(24)
         intro_copy = QVBoxLayout()
         intro_copy.setSpacing(8)
-        kicker = QLabel("LOCAL CODE WORKSPACE")
+        kicker = QLabel(tr("LOCAL CODE WORKSPACE"))
         kicker.setObjectName("Kicker")
         intro_copy.addWidget(kicker)
-        title = QLabel(APP_TAGLINE)
+        title = QLabel(tr(APP_TAGLINE))
         title.setObjectName("Title")
         intro_copy.addWidget(title)
-        subtitle = QLabel("Write or import code. Prism explains the flow, structure, execution, and data without leaving this window.")
+        subtitle = QLabel(
+            tr("Write or import code. Prism explains the flow, structure, execution, "
+               "and data without leaving this window.")
+        )
         subtitle.setObjectName("Subtitle")
         subtitle.setWordWrap(True)
         subtitle.setMaximumWidth(720)
@@ -869,21 +876,26 @@ class WelcomePage(QWidget):
         intro_row.addWidget(self.preview, 0, Qt.AlignmentFlag.AlignTop)
         outer.addLayout(intro_row)
         self.intro_widgets = [kicker, title, subtitle, self.preview]
+        self.kicker = kicker
+        self.title = title
+        self.subtitle = subtitle
 
         card = QFrame()
         card.setObjectName("Card")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(28, 24, 28, 24)
         card_layout.setSpacing(14)
-        card_title = QLabel("Start an analysis")
+        card_title = QLabel(tr("Start an analysis"))
         card_title.setObjectName("CardTitle")
         card_layout.addWidget(card_title)
-        card_sub = QLabel("The document starts blank. Open the editor, import a source file, or try a case.")
+        card_sub = QLabel(
+            tr("The document starts blank. Open the editor, import a source file, or try a case.")
+        )
         card_sub.setObjectName("Muted")
         card_sub.setWordWrap(True)
         card_layout.addWidget(card_sub)
         language_row = QHBoxLayout()
-        language_label = QLabel("Language")
+        language_label = QLabel(tr("Language"))
         language_label.setObjectName("Muted")
         self.language = QComboBox()
         for language_id, name in LANGUAGE_LABELS:
@@ -893,30 +905,67 @@ class WelcomePage(QWidget):
         language_row.addStretch(1)
         card_layout.addLayout(language_row)
         buttons = QHBoxLayout()
-        self.editor_button = QPushButton("Open editor")
+        self.editor_button = QPushButton(tr("Open editor"))
         self.editor_button.setObjectName("Primary")
-        self.import_button = QPushButton("Import file")
-        self.example_button = QPushButton("Try a case")
+        self.import_button = QPushButton(tr("Import file"))
+        self.example_button = QPushButton(tr("Try a case"))
+        self.compare_button = QPushButton(tr("Compare versions"))
         buttons.addWidget(self.editor_button)
         buttons.addWidget(self.import_button)
         buttons.addWidget(self.example_button)
+        buttons.addWidget(self.compare_button)
         buttons.addStretch(1)
         card_layout.addLayout(buttons)
         features = QLabel(
-            "FLOWCHART   Trace decisions and loops\n"
-            "SYNTAX TREE   Inspect the AST structure\n"
-            "LIVE TRACE   Step through the safe run\n"
-            "DATA FLOW   Follow values to their use\n"
-            "GUIDE   Read the explanation beside the code"
+            tr("FLOWCHART   Trace decisions and loops\n"
+               "SYNTAX TREE   Inspect the AST structure\n"
+               "LIVE TRACE   Step through the safe run\n"
+               "DATA FLOW   Follow values to their use\n"
+               "GUIDE   Read the explanation beside the code")
         )
         features.setObjectName("Feature")
         features.setWordWrap(True)
         card_layout.addWidget(features)
         outer.addWidget(card)
         outer.addStretch(1)
-        footnote = QLabel("Local only · Python · JavaScript · TypeScript · Java · C++ · C")
+        footnote = QLabel(
+            tr("Local only · Python · JavaScript · TypeScript · Java · C++ · C")
+        )
         footnote.setObjectName("Tiny")
         outer.addWidget(footnote)
+
+        self.card_title = card_title
+        self.card_sub = card_sub
+        self.language_label = language_label
+        self.features = features
+        self.footnote = footnote
+
+    def retranslate(self) -> None:
+        self.kicker.setText(tr("LOCAL CODE WORKSPACE"))
+        self.title.setText(tr(APP_TAGLINE))
+        self.subtitle.setText(
+            tr("Write or import code. Prism explains the flow, structure, execution, "
+               "and data without leaving this window.")
+        )
+        self.card_title.setText(tr("Start an analysis"))
+        self.card_sub.setText(
+            tr("The document starts blank. Open the editor, import a source file, or try a case.")
+        )
+        self.language_label.setText(tr("Language"))
+        self.editor_button.setText(tr("Open editor"))
+        self.import_button.setText(tr("Import file"))
+        self.example_button.setText(tr("Try a case"))
+        self.compare_button.setText(tr("Compare versions"))
+        self.features.setText(
+            tr("FLOWCHART   Trace decisions and loops\n"
+               "SYNTAX TREE   Inspect the AST structure\n"
+               "LIVE TRACE   Step through the safe run\n"
+               "DATA FLOW   Follow values to their use\n"
+               "GUIDE   Read the explanation beside the code")
+        )
+        self.footnote.setText(
+            tr("Local only · Python · JavaScript · TypeScript · Java · C++ · C")
+        )
 
     def play_intro(self) -> None:
         for index, widget in enumerate(self.intro_widgets):
@@ -930,30 +979,39 @@ class EditorPage(QWidget):
         layout.setContentsMargins(24, 18, 24, 18)
         layout.setSpacing(12)
         head = QHBoxLayout()
-        self.back = QPushButton("← Welcome")
+        self.back = QPushButton(tr("← Welcome"))
         self.back.setObjectName("Ghost")
         head.addWidget(self.back)
         self.file_label = QLabel("main.py")
         self.file_label.setObjectName("CardTitle")
         head.addWidget(self.file_label)
         head.addStretch(1)
-        self.import_button = QPushButton("Import")
-        self.clear_button = QPushButton("Clear")
+        self.import_button = QPushButton(tr("Import"))
+        self.clear_button = QPushButton(tr("Clear"))
         head.addWidget(self.import_button)
         head.addWidget(self.clear_button)
         layout.addLayout(head)
         self.editor = CodeEditor()
-        self.editor.setPlaceholderText("Write Python code here…")
+        self.editor.setPlaceholderText(tr("Write Python code here…"))
         layout.addWidget(self.editor, 1)
         foot = QHBoxLayout()
-        self.meta = QLabel("Blank document")
+        self.meta = QLabel(tr("Blank document"))
         self.meta.setObjectName("Tiny")
         foot.addWidget(self.meta)
         foot.addStretch(1)
-        self.analyze = QPushButton("Visualize & explain")
+        self.analyze = QPushButton(tr("Visualize & explain"))
         self.analyze.setObjectName("Primary")
         foot.addWidget(self.analyze)
         layout.addLayout(foot)
+
+    def retranslate(self) -> None:
+        self.back.setText(tr("← Welcome"))
+        self.import_button.setText(tr("Import"))
+        self.clear_button.setText(tr("Clear"))
+        self.editor.setPlaceholderText(tr("Write Python code here…"))
+        if self.meta.text().strip() in ("Blank document", ""):
+            self.meta.setText(tr("Blank document"))
+        self.analyze.setText(tr("Visualize & explain"))
 
 
 class ResultsPage(QWidget):
@@ -966,7 +1024,7 @@ class ResultsPage(QWidget):
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(10)
         head = QHBoxLayout()
-        self.back = QPushButton("← Welcome")
+        self.back = QPushButton(tr("← Welcome"))
         self.back.setObjectName("Ghost")
         head.addWidget(self.back)
         self.file_label = QLabel("main.py")
@@ -976,9 +1034,9 @@ class ResultsPage(QWidget):
         self.summary.setObjectName("Tiny")
         head.addWidget(self.summary)
         head.addStretch(1)
-        self.ai_button = QPushButton("Enhance guide")
-        self.edit = QPushButton("Edit code")
-        self.export = QPushButton("Save guide")
+        self.ai_button = QPushButton(tr("Enhance guide"))
+        self.edit = QPushButton(tr("Edit code"))
+        self.export = QPushButton(tr("Save guide"))
         head.addWidget(self.ai_button)
         head.addWidget(self.edit)
         head.addWidget(self.export)
@@ -996,15 +1054,26 @@ class ResultsPage(QWidget):
         self.trace_view = TraceView()
         self.data = DataFlowView()
         self.guide_view = QTextBrowser()
-        self.tabs.addTab(self.flow, "Flowchart")
-        self.tabs.addTab(self.tree, "Syntax Tree")
-        self.tabs.addTab(self.trace_view, "Live Trace")
-        self.tabs.addTab(self.data, "Data Flow")
-        self.tabs.addTab(self.guide_view, "Guide")
+        self.tabs.addTab(self.flow, tr("Flowchart"))
+        self.tabs.addTab(self.tree, tr("Syntax Tree"))
+        self.tabs.addTab(self.trace_view, tr("Live Trace"))
+        self.tabs.addTab(self.data, tr("Data Flow"))
+        self.tabs.addTab(self.guide_view, tr("Guide"))
         self.tabs.currentChanged.connect(self._tab_changed)
         split.addWidget(self.tabs)
         split.setSizes([320, 940])
         layout.addWidget(split, 1)
+
+    def retranslate(self) -> None:
+        self.back.setText(tr("← Welcome"))
+        self.ai_button.setText(tr("Enhance guide"))
+        self.edit.setText(tr("Edit code"))
+        self.export.setText(tr("Save guide"))
+        self.tabs.setTabText(0, tr("Flowchart"))
+        self.tabs.setTabText(1, tr("Syntax Tree"))
+        self.tabs.setTabText(2, tr("Live Trace"))
+        self.tabs.setTabText(3, tr("Data Flow"))
+        self.tabs.setTabText(4, tr("Guide"))
 
     def _tab_changed(self, index: int) -> None:
         widget = self.tabs.widget(index)
@@ -1041,7 +1110,11 @@ class ResultsPage(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Prism — code analysis workspace")
+        self.settings = QSettings("Prism", "Prism Native")
+        saved_language = str(self.settings.value("ui/language", "en"))
+        _apply_ui_language(saved_language)
+
+        self.setWindowTitle(tr("Prism — code analysis workspace"))
         self.resize(1400, 900)
         self.setMinimumSize(980, 680)
         icon = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
@@ -1055,16 +1128,29 @@ class MainWindow(QMainWindow):
         brand = QLabel("prism")
         brand.setObjectName("Brand")
         top_layout.addWidget(brand)
-        activity = QLabel("CODE WORKSPACE")
-        activity.setObjectName("Tiny")
-        top_layout.addWidget(activity)
+        self.activity = QLabel(tr("CODE WORKSPACE"))
+        self.activity.setObjectName("Tiny")
+        top_layout.addWidget(self.activity)
+        language_label = QLabel(tr("UI language"))
+        language_label.setObjectName("Tiny")
+        top_layout.addWidget(language_label)
+        self.ui_language = QComboBox()
+        for code, name in UI_LANGUAGES:
+            self.ui_language.addItem(name, code)
+        index = self.ui_language.findData(saved_language)
+        self.ui_language.setCurrentIndex(index if index >= 0 else 0)
+        self.ui_language.currentIndexChanged.connect(
+            lambda _index: self.set_ui_language(self.ui_language.currentData())
+        )
+        top_layout.addWidget(self.ui_language)
         top_layout.addStretch(1)
-        self.ai_button = QPushButton("Connect AI")
+        self.ai_button = QPushButton(tr("Connect AI"))
         self.ai_button.setObjectName("Chip")
         top_layout.addWidget(self.ai_button)
-        local = QLabel("Local · six languages")
-        local.setObjectName("Tiny")
-        top_layout.addWidget(local)
+        self.local_label = QLabel(tr("Local · six languages"))
+        self.local_label.setObjectName("Tiny")
+        top_layout.addWidget(self.local_label)
+        self.language_label = language_label
 
         container = QWidget()
         root = QVBoxLayout(container)
@@ -1075,17 +1161,18 @@ class MainWindow(QMainWindow):
         self.welcome = WelcomePage()
         self.editor_page = EditorPage()
         self.results = ResultsPage()
+        self.compare_page = ComparePage()
         self.stack.addWidget(self.welcome)
         self.stack.addWidget(self.editor_page)
         self.stack.addWidget(self.results)
+        self.stack.addWidget(self.compare_page)
         root.addWidget(self.stack, 1)
         self.setCentralWidget(container)
         self.setStatusBar(QStatusBar())
-        self.statusBar().showMessage("Local · Python")
+        self.statusBar().showMessage(tr("Local · Python"))
 
         self.current_file = "main.py"
         self.language_id = "python"
-        self.settings = QSettings("Prism", "Prism Native")
         self.ai_settings, self.remember_key, self.ai_saved = self._load_ai_settings()
         self.ai_worker = None
         self.ai_busy = False
@@ -1098,6 +1185,7 @@ class MainWindow(QMainWindow):
         self.welcome.editor_button.clicked.connect(self.show_editor)
         self.welcome.import_button.clicked.connect(self.import_file)
         self.welcome.example_button.clicked.connect(self.choose_case)
+        self.welcome.compare_button.clicked.connect(self.show_compare)
         self.welcome.language.currentIndexChanged.connect(
             lambda _index: self.set_language(self.welcome.language.currentData())
         )
@@ -1109,54 +1197,117 @@ class MainWindow(QMainWindow):
         self.results.edit.clicked.connect(self.show_editor)
         self.results.export.clicked.connect(self.save_guide)
         self.results.ai_button.clicked.connect(self.enhance_guide)
+        self.compare_page.back.connect(self.show_welcome)
         self.ai_button.clicked.connect(self.open_ai_settings)
 
     def _menu(self):
-        menu = self.menuBar().addMenu("&File")
-        new_action = QAction("New analysis", self)
+        menu = self.menuBar().addMenu(tr("&File"))
+        new_action = QAction(tr("New analysis"), self)
         new_action.setShortcut("Ctrl+N")
         new_action.triggered.connect(self.show_editor)
-        open_action = QAction("Open Python file…", self)
+        open_action = QAction(tr("Open Python file…"), self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.import_file)
-        save_action = QAction("Save guide…", self)
+        save_action = QAction(tr("Save guide…"), self)
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_guide)
-        quit_action = QAction("Quit", self)
+        quit_action = QAction(tr("Quit"), self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.close)
         menu.addActions([new_action, open_action, save_action])
         menu.addSeparator()
         menu.addAction(quit_action)
-        view = self.menuBar().addMenu("&View")
-        full = QAction("Toggle full screen", self)
+        view = self.menuBar().addMenu(tr("&View"))
+        full = QAction(tr("Toggle full screen"), self)
         full.setShortcut("F11")
         full.triggered.connect(self.toggle_fullscreen)
         view.addAction(full)
-        tools = self.menuBar().addMenu("&Tools")
-        ai_action = QAction("Connect AI…", self)
+        tools = self.menuBar().addMenu(tr("&Tools"))
+        compare_action = QAction(tr("Compare two versions…"), self)
+        compare_action.setShortcut("Ctrl+D")
+        compare_action.triggered.connect(self.show_compare)
+        tools.addAction(compare_action)
+        tools.addSeparator()
+        ai_action = QAction(tr("Connect AI…"), self)
         ai_action.triggered.connect(self.open_ai_settings)
         tools.addAction(ai_action)
-        enhance_action = QAction("Enhance current guide…", self)
+        enhance_action = QAction(tr("Enhance current guide…"), self)
         enhance_action.setShortcut("Ctrl+E")
         enhance_action.triggered.connect(self.enhance_guide)
         tools.addAction(enhance_action)
-        help_menu = self.menuBar().addMenu("&Help")
-        about_action = QAction("About Prism", self)
+        help_menu = self.menuBar().addMenu(tr("&Help"))
+        about_action = QAction(tr("About Prism"), self)
         about_action.triggered.connect(self.about)
         help_menu.addAction(about_action)
+
+        self.menus = {
+            "file": (menu, "&File"),
+            "view": (view, "&View"),
+            "tools": (tools, "&Tools"),
+            "help": (help_menu, "&Help"),
+        }
+        self.actions = {
+            "new": (new_action, "New analysis"),
+            "open": (open_action, "Open Python file…"),
+            "save": (save_action, "Save guide…"),
+            "quit": (quit_action, "Quit"),
+            "full": (full, "Toggle full screen"),
+            "compare": (compare_action, "Compare two versions…"),
+            "ai": (ai_action, "Connect AI…"),
+            "enhance": (enhance_action, "Enhance current guide…"),
+            "about": (about_action, "About Prism"),
+        }
+
+    def retranslate(self) -> None:
+        """Re-apply every string after the interface language changed."""
+        self.setWindowTitle(tr("Prism — code analysis workspace"))
+        self.activity.setText(tr("CODE WORKSPACE"))
+        self.language_label.setText(tr("UI language"))
+        self.ai_button.setText(tr("Connect AI"))
+        self.local_label.setText(tr("Local · six languages"))
+        for widget, key in self.menus.values():
+            widget.setTitle(tr(key))
+        for widget, key in self.actions.values():
+            widget.setText(tr(key))
+        self.welcome.retranslate()
+        self.editor_page.retranslate()
+        self.results.retranslate()
+        self.compare_page.retranslate()
+        self.statusBar().showMessage(tr("Local · Python"))
+
+    def set_ui_language(self, code: str) -> None:
+        code = code or "en"
+        _apply_ui_language(code)
+        self.settings.setValue("ui/language", code)
+        index = self.ui_language.findData(code)
+        if index >= 0 and self.ui_language.currentIndex() != index:
+            self.ui_language.blockSignals(True)
+            self.ui_language.setCurrentIndex(index)
+            self.ui_language.blockSignals(False)
+        self.retranslate()
 
     def show_welcome(self):
         self.stack.setCurrentWidget(self.welcome)
         fade_in(self.welcome, 220)
         self.welcome.play_intro()
-        self.statusBar().showMessage("Local · Python / JavaScript / TypeScript / Java / C++ / C")
+        self.statusBar().showMessage(tr("Local · Python / JavaScript / TypeScript / Java / C++ / C"))
 
     def show_editor(self):
         self.stack.setCurrentWidget(self.editor_page)
         fade_in(self.editor_page, 200)
         self.editor_page.editor.setFocus()
         self.statusBar().showMessage(f"{self.current_file} · {LANGUAGE_NAMES[self.language_id]}")
+
+    def show_compare(self):
+        index = self.compare_page.language_box.findData(self.language_id)
+        if index >= 0 and self.compare_page.language_box.currentIndex() != index:
+            self.compare_page.language_box.blockSignals(True)
+            self.compare_page.language_box.setCurrentIndex(index)
+            self.compare_page.language_box.blockSignals(False)
+            self.compare_page.language = self.language_id
+        self.stack.setCurrentWidget(self.compare_page)
+        fade_in(self.compare_page, 200)
+        self.statusBar().showMessage(tr("Compare · structural diff between two versions"))
 
     def set_language(self, language_id: str) -> None:
         if language_id not in LANGUAGE_NAMES:
@@ -1203,24 +1354,27 @@ class MainWindow(QMainWindow):
         self.editor_page.editor.clear()
         self.current_file = "main.py"
         self.editor_page.file_label.setText("main.py")
-        self.editor_page.meta.setText("Blank document")
+        self.editor_page.meta.setText(tr("Blank document"))
 
     def import_file(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Import source file", "",
-            "Code files (*.py *.js *.jsx *.ts *.tsx *.java *.cpp *.cc *.cxx *.c *.h *.hpp);;"
+            self, tr("Import source file"), "",
+            tr("Code files") + " (*.py *.js *.jsx *.ts *.tsx *.java *.cpp *.cc *.cxx *.c *.h *.hpp);;"
             "Python (*.py);;JavaScript (*.js *.jsx);;TypeScript (*.ts *.tsx);;"
-            "Java (*.java);;C/C++ (*.c *.h *.cpp *.cc *.cxx *.hpp);;All files (*)"
+            "Java (*.java);;C/C++ (*.c *.h *.cpp *.cc *.cxx *.hpp);;" + tr("All files") + " (*)"
         )
         if not path:
             return
         try:
             data = Path(path).read_text(encoding="utf-8", errors="replace")
         except OSError as error:
-            QMessageBox.warning(self, "Could not read file", str(error))
+            QMessageBox.warning(self, tr("Could not read file"), str(error))
             return
         if len(data) > MAX_SOURCE:
-            QMessageBox.warning(self, "File too large", "Source files must stay under 60,000 characters.")
+            QMessageBox.warning(
+                self, tr("File too large"),
+                tr("Source files must stay under 60,000 characters."),
+            )
             return
         suffix = Path(path).suffix.lower()
         if suffix in {".js", ".jsx", ".mjs", ".cjs"}:
