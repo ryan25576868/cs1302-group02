@@ -1,0 +1,17 @@
+{
+  "name": "prism-visual-code-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A local-first code visualizer with a Python desktop shell and beginner-friendly explanations.",
+  "author": "Prism",
+  "scripts": {
+    "start": "python python_app/server.py --port 4173",
+    "desktop": "python python_app/desktop.py",
+    "test": "node tests/run-tests.mjs",
+    "test:python": "python -m unittest discover -s tests_py -v"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
