@@ -1,4 +1,4 @@
-# Prism 鈥?code analysis workspace
+# Prism ：code analysis workspace
 
 Prism is a local-first code visualizer for people who are learning to program. Pick a language, paste a snippet, choose a lens, and get four linked views plus a beginner-friendly guide that explains the program line by line. The workbench uses a restrained, product-neutral layout: a project bar, a compact view rail, a source/visual/guide workspace, rounded editor tabs, breadcrumbs, quick actions, and a quiet status bar.
 
