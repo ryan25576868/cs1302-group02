@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "prism-code-workspace"
+version = "1.0.0"
+description = "A native Python workspace for understanding code with flowchart, AST, safe trace, structural diff, and beginner guide."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "CS1302 Group 02"},
+]
+keywords = ["education", "ast", "code-analysis", "visualization", "diff", "pyside6"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Education",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "tree-sitter>=0.23.0",
+    "tree-sitter-javascript>=0.23.0",
+    "tree-sitter-typescript>=0.23.0",
+    "tree-sitter-java>=0.23.0",
+    "tree-sitter-cpp>=0.23.0",
+    "tree-sitter-c>=0.23.0",
+]
+
+[project.optional-dependencies]
+gui = [
+    "PySide6>=6.7.0",
+]
+compare = [
+    "structscope>=0.1.0",
+]
+
+[project.scripts]
+prism-native = "python_app.launch_native:main"
+prism-desktop = "python_app.desktop:main"
+
+[project.urls]
+Homepage = "https://github.com/cs1302-group02/prism"
+Repository = "https://github.com/cs1302-group02/prism"
+
+[tool.hatch.build.targets.wheel]
+packages = ["python_app"]
