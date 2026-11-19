@@ -39,7 +39,7 @@ compare = [
 
 [project.scripts]
 prism-native = "python_app.launch_native:main"
-prism-desktop = "python_app.desktop:main"
+prism-desktop = "python_app.launch_native:main"
 
 [project.urls]
 Homepage = "https://github.com/cs1302-group02/prism"

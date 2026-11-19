@@ -12,6 +12,7 @@ Prism turns a source file into a linked set of views—flow, syntax, execution, 
 - **Four linked views** — Flowchart, Syntax Tree, Live Trace, and Data Flow.
 - **Structural compare** — diff two versions of one file by classes and functions instead of by lines, powered by [structscope](https://pypi.org/project/structscope/).
 - **Beginner's guide** — overview, mental model, step-by-step walkthrough, line-by-line notes, concepts, common mistakes, and a quick check.
+- **Function POV** — practise whole-program or function execution with a bounded, non-executing simulator, interactive challenges, and verified similar exercises.
 - **Native motion** — page and tab transitions, sequenced flowchart nodes, trace-detail fades, and a drifting welcome illustration.
 - **Optional AI** — add a second explanation with OpenAI-compatible, DeepSeek, Grok, Anthropic, or Gemini. Local analysis needs no AI.
 - **Bilingual interface** — switch between English and 简体中文 from the top bar; the window re-labels itself without a restart.
@@ -64,6 +65,24 @@ The app opens with a blank document. Choose a language, then:
 
 5. Use **Enhance guide** to request an optional AI explanation.
 6. Use **Save guide** to export the generated guide as Markdown.
+
+For Python analyses, choose **Function POV** beside the result actions to open
+the **Be the Code** and **Be the Function** modes. Be the Code follows
+top-level statements even when there are no functions; Be the Function lets you
+select a function and enter JSON arguments, with blank optional values using
+their defaults. Both modes reuse the same challenges, hints, answer history,
+source highlighting, variable and call-stack views, and completion summary.
+Prism validates a restricted AST subset before play and simulates it without
+executing the source. After completing a practice, choose **Practice Similar
+Questions** for **New Values** or **Similar Logic**. New Values changes
+supported literal inputs or function arguments while keeping the original AST
+structure and source intact. It prefers coordinated numeric changes and, for
+simple comparisons, values near branch boundaries. Similar Logic uses a small
+catalog of beginner-friendly, predefined patterns and requires an AST logic
+change beyond renamed variables or changed literals. It also explains the
+concept being practised. Generated code is parsed and simulated before it is
+shown; each session avoids repeating the same variant. The side-by-side preview
+keeps the original exercise available for comparison.
 
 ![Java analysis in Prism](screenshots/native-java.png)
 
@@ -158,6 +177,8 @@ python_app/
   compiled_analysis.py   tree-sitter Java/C++/C analysis and trace
   compare.py             Compare page: two-version map and aligned excerpts
   compare_engine.py      Prism trees -> structscope symbol model, structural diff
+  function_pov/          Restricted Python analyzer, simulator, and exercise generator
+  function_pov_ui.py     Native Function POV selection and practice screens
   i18n.py                Interface strings: English source text + translations
   ai.py                  Optional AI provider calls and validation
   launch_native.py       Application entry point
@@ -188,7 +209,7 @@ screenshots/             Native app screenshots
 python -m unittest discover -s tests_py -v
 ```
 
-**39 tests currently pass.** They cover Python, JavaScript, TypeScript, Java, C++, and C analysis; trace output; guide generation; syntax errors; AI settings validation; empty input; the structural compare engine (model mapping, statuses, renames, line alignment); and the interface strings, including a coverage test that fails when a `tr(...)` string has no translation.
+**85 tests discovered: 78 passed, 7 skipped, 0 failed.** The 7 structural-compare tests are skipped when the optional `structscope` package is unavailable. Coverage includes Python, JavaScript, TypeScript, Java, C++, and C analysis; trace output; guide generation; syntax errors; AI settings validation; empty input; Be the Code and Be the Function's bounded simulations and native UI flow; deterministic and duplicate-safe similar exercises; Flowchart viewport fitting; and translated interface strings. The structural-compare tests cover model mapping, statuses, renames, and line alignment when `structscope` is installed.
 
 ## Troubleshooting
 
@@ -201,6 +222,8 @@ python -m unittest discover -s tests_py -v
 
 - The compiled-language trace supports a beginner subset. Complex generics, pointer arithmetic, macros, multithreading, and exception-heavy Java are not fully interpreted.
 - JavaScript and TypeScript coverage is intentionally conservative; some higher-order and dynamic constructs are outside the trace subset.
+- Function POV is Python-only. Be the Code supports simple top-level assignments and updates, expressions, nested `if/else`, bounded `for`/`while`, safe built-ins, direct project-function calls, and `print` output. Be the Function supports simple positional parameters, assignments, conditions, bounded loops, direct calls, and returns. Imports, classes, async/nested functions, decorated functions, advanced parameters, arbitrary attributes, file/network access, and other side effects are not simulated. Simulations cap source size, AST nodes, steps, call depth, values, output, and total loop iterations; unsupported behavior is rejected before play.
+- Practice Similar Questions is limited to safe literal input changes for top-level scalar/list/tuple assignments, simple JSON scalar/list/tuple function arguments, and integer `range` bounds. New Values preserves the AST structure; branch-focused candidates are currently limited to simple numeric comparisons against literals or known inputs, including loop variables over numeric lists/tuples. Similar Logic requires a normalized AST difference in an operator, expression, or control-flow structure; renaming identifiers or changing literals alone is rejected. Its supported patterns are Be the Code list-accumulation loops (with or without one condition), bounded counter `while` loops, and simple conditional output; Be the Function list-accumulation loops with returns, one- or two-parameter branch/return functions, simple arithmetic returns, and a direct helper call followed by arithmetic. Multi-function Be the Code programs remain unsupported for Similar Logic. Other structures, multiple interacting patterns, unsupported defaults, or exhausted variants are explained rather than approximated. Every candidate must pass the same restricted AST simulator before display.
 - The flow and data views are explanatory diagrams, not compiler-grade control-flow graphs or SSA.
 - Source snippets are capped at 60,000 characters.
 - AI output depends on the selected provider and model. The local guide remains available if a request fails.
@@ -218,4 +241,4 @@ python -m unittest discover -s tests_py -v
 
 ## License
 
-No license file is included in this workspace. Add the license appropriate for your distribution before publishing.
+This project is distributed under the MIT License; see [LICENSE](./LICENSE).

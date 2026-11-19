@@ -19,7 +19,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QAction, QColor, QFont, QFontDatabase, QIcon, QPainter, QPen, QRadialGradient,
-    QSyntaxHighlighter, QTextCharFormat,
+    QResizeEvent, QShowEvent, QSyntaxHighlighter, QTextCharFormat,
 )
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
@@ -40,6 +40,7 @@ try:
     from python_app.js_analysis import analyze_javascript
     from python_app.compiled_analysis import analyze_compiled
     from python_app.compare import ComparePage
+    from python_app.function_pov_ui import FunctionPOVPage
     from python_app.i18n import LANGUAGES as UI_LANGUAGES, set_language as _apply_ui_language, tr
 except ImportError:  # running the file directly
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -47,6 +48,7 @@ except ImportError:  # running the file directly
     from python_app.js_analysis import analyze_javascript
     from python_app.compiled_analysis import analyze_compiled
     from python_app.compare import ComparePage
+    from python_app.function_pov_ui import FunctionPOVPage
     from python_app.i18n import LANGUAGES as UI_LANGUAGES, set_language as _apply_ui_language, tr
 
 APP_NAME = "Prism"
@@ -454,6 +456,9 @@ class FlowchartView(QGraphicsView):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.timeout.connect(self._fit_scene)
 
     def set_analysis(self, analysis: dict) -> None:
         self._scene.clear()
@@ -463,9 +468,31 @@ class FlowchartView(QGraphicsView):
         entry = analysis.get("entry") or {}
         focus = entry.get("node") if entry.get("kind") == "function" and entry.get("node") else analysis.get("root")
         self._column(x, y, analysis, focus)
-        self.fitInView(self._scene.itemsBoundingRect().adjusted(-20, -20, 20, 20),
-                       Qt.AspectRatioMode.KeepAspectRatio)
+        self._schedule_fit()
         QTimer.singleShot(20, self._animate_items)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._schedule_fit()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._schedule_fit()
+
+    def _schedule_fit(self) -> None:
+        if self.isVisible() and self.viewport().width() > 0 and self.viewport().height() > 0:
+            self._fit_timer.start(0)
+
+    def _fit_scene(self) -> None:
+        if not self.isVisible() or self.viewport().width() <= 0 or self.viewport().height() <= 0:
+            return
+        bounds = self._scene.itemsBoundingRect()
+        if bounds.isEmpty():
+            return
+        self.fitInView(
+            bounds.adjusted(-20, -20, 20, 20),
+            Qt.AspectRatioMode.KeepAspectRatio,
+        )
 
     def _animate_items(self) -> None:
         items = sorted(self._scene.items(), key=lambda item: item.sceneBoundingRect().top())
@@ -1020,6 +1047,8 @@ class ResultsPage(QWidget):
         self.guide = None
         self.trace = None
         self.analysis = None
+        self.language = "python"
+        self.function_pov_supported = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(10)
@@ -1037,6 +1066,11 @@ class ResultsPage(QWidget):
         self.ai_button = QPushButton(tr("Enhance guide"))
         self.edit = QPushButton(tr("Edit code"))
         self.export = QPushButton(tr("Save guide"))
+        self.function_pov_button = QPushButton(tr("Function POV"))
+        self.function_pov_button.setEnabled(False)
+        self.function_pov_button.setVisible(False)
+        self.function_pov_button.setToolTip(tr("Function POV currently supports Python only."))
+        head.addWidget(self.function_pov_button)
         head.addWidget(self.ai_button)
         head.addWidget(self.edit)
         head.addWidget(self.export)
@@ -1069,6 +1103,12 @@ class ResultsPage(QWidget):
         self.ai_button.setText(tr("Enhance guide"))
         self.edit.setText(tr("Edit code"))
         self.export.setText(tr("Save guide"))
+        self.function_pov_button.setText(tr("Function POV"))
+        self.function_pov_button.setToolTip(
+            tr("Function POV is available for this Python analysis.")
+            if self.function_pov_supported
+            else tr("Open Function POV to see language support.")
+        )
         self.tabs.setTabText(0, tr("Flowchart"))
         self.tabs.setTabText(1, tr("Syntax Tree"))
         self.tabs.setTabText(2, tr("Live Trace"))
@@ -1085,6 +1125,15 @@ class ResultsPage(QWidget):
         self.trace = result["trace"]
         self.guide = result["guide"]
         self.ai_text = ""
+        self.language = language
+        self.function_pov_supported = language == "python"
+        self.function_pov_button.setVisible(self.function_pov_supported)
+        self.function_pov_button.setEnabled(self.function_pov_supported)
+        self.function_pov_button.setToolTip(
+            tr("Function POV is available for this Python analysis.")
+            if self.function_pov_supported
+            else tr("Open Function POV to see language support.")
+        )
         self.file_label.setText(filename)
         language_name = LANGUAGE_NAMES.get(language, language.title())
         self.summary.setText(
@@ -1161,10 +1210,12 @@ class MainWindow(QMainWindow):
         self.welcome = WelcomePage()
         self.editor_page = EditorPage()
         self.results = ResultsPage()
+        self.function_pov_page = FunctionPOVPage()
         self.compare_page = ComparePage()
         self.stack.addWidget(self.welcome)
         self.stack.addWidget(self.editor_page)
         self.stack.addWidget(self.results)
+        self.stack.addWidget(self.function_pov_page)
         self.stack.addWidget(self.compare_page)
         root.addWidget(self.stack, 1)
         self.setCentralWidget(container)
@@ -1197,6 +1248,8 @@ class MainWindow(QMainWindow):
         self.results.edit.clicked.connect(self.show_editor)
         self.results.export.clicked.connect(self.save_guide)
         self.results.ai_button.clicked.connect(self.enhance_guide)
+        self.results.function_pov_button.clicked.connect(self.open_function_pov)
+        self.function_pov_page.backRequested.connect(self.show_results)
         self.compare_page.back.connect(self.show_welcome)
         self.ai_button.clicked.connect(self.open_ai_settings)
 
@@ -1272,6 +1325,7 @@ class MainWindow(QMainWindow):
         self.welcome.retranslate()
         self.editor_page.retranslate()
         self.results.retranslate()
+        self.function_pov_page.retranslate()
         self.compare_page.retranslate()
         self.statusBar().showMessage(tr("Local · Python"))
 
@@ -1308,6 +1362,32 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.compare_page)
         fade_in(self.compare_page, 200)
         self.statusBar().showMessage(tr("Compare · structural diff between two versions"))
+
+    def open_function_pov(self) -> None:
+        if not self.results.analysis:
+            return
+        if self.results.function_pov_supported:
+            self.function_pov_page.set_source(
+                self.results.analysis.get("source", ""),
+                self.results.file_label.text(),
+            )
+        else:
+            language = LANGUAGE_NAMES.get(self.results.language, self.results.language.title())
+            self.function_pov_page.set_unsupported_language(language)
+        self.stack.setCurrentWidget(self.function_pov_page)
+        fade_in(self.function_pov_page, 220)
+        self.statusBar().showMessage(tr("Function POV · safe Python simulation"))
+
+    def show_results(self) -> None:
+        if not self.results.analysis:
+            self.show_welcome()
+            return
+        self.stack.setCurrentWidget(self.results)
+        fade_in(self.results, 180)
+        self.statusBar().showMessage(
+            f"{self.results.file_label.text()} · "
+            f"{LANGUAGE_NAMES.get(self.results.language, self.results.language.title())}"
+        )
 
     def set_language(self, language_id: str) -> None:
         if language_id not in LANGUAGE_NAMES:

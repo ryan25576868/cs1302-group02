@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from python_app import i18n  # noqa: E402
 
-UI_MODULES = ["native_app.py", "compare.py"]
+UI_MODULES = ["native_app.py", "compare.py", "function_pov_ui.py"]
 APP_DIR = Path(__file__).resolve().parent.parent / "python_app"
 
 
@@ -62,6 +62,43 @@ class TranslationTableTests(unittest.TestCase):
         i18n.set_language("zh")
         self.assertEqual(i18n.tr("Added"), "新增")
         self.assertIn("BOOM", i18n.tr("Could not compare: {error}", error="BOOM"))
+
+    def test_similar_logic_feedback_is_translated(self) -> None:
+        i18n.set_language("zh")
+        self.assertIn("逻辑变化", i18n.tr("Logic change: {explanation}"))
+        self.assertIn(
+            "比较规则",
+            i18n.tr(
+                "The comparison rule changed; practise evaluating the condition and choosing a branch."
+            ),
+        )
+
+    def test_simulation_errors_are_translated_with_useful_context(self) -> None:
+        message = "The source is too long to simulate safely (limit: 60000 characters)."
+        i18n.set_language("en")
+        self.assertEqual(i18n.simulation_error_text(message), message)
+
+        i18n.set_language("zh")
+        translated_limit = i18n.simulation_error_text(message)
+        self.assertIn("安全模拟长度上限", translated_limit)
+        self.assertIn("60000", translated_limit)
+
+        translated_value = i18n.simulation_error_text("score is too large.")
+        self.assertIn("score", translated_value)
+        self.assertIn("过大", translated_value)
+
+        translated_syntax = i18n.simulation_error_text(
+            "Supported statements are assignments at line 3"
+        )
+        self.assertIn("第 3 行", translated_syntax)
+        self.assertIn("支持范围", translated_syntax)
+
+        translated_input = i18n.tr(
+            "JSON input is too long (maximum {limit} characters).",
+            limit=10000,
+        )
+        self.assertIn("输入过长", translated_input)
+        self.assertIn("10000", translated_input)
 
     def test_missing_field_does_not_raise(self) -> None:
         i18n.set_language("zh")
