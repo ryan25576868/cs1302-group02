@@ -10,6 +10,8 @@ from __future__ import annotations
 import ast
 import html
 import re
+import operator
+import symtable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -140,6 +142,7 @@ class _NodeFactory:
                 "header": f"for {self.text(node.target)} in {self.text(node.iter)}",
                 "loopHeader": f"{self.text(node.target)} in {self.text(node.iter)}",
                 "body": body, "keyword": "for",
+                "alternate": self.block(node.orelse, depth) if node.orelse else None,
                 "loopMeta": {"style": "for"},
             }
         if isinstance(node, ast.While):
@@ -150,8 +153,11 @@ class _NodeFactory:
                 "endLine": self.end_line(node),
                 "header": f"while {self.text(node.test)}",
                 "condition": self.text(node.test), "body": body, "keyword": "while",
+                "alternate": self.block(node.orelse, depth) if node.orelse else None,
             }
         if isinstance(node, ast.Assign):
+            if len(node.targets) != 1:
+                return self.action(node, "unsupported")
             target = self.text(node.targets[0]) if node.targets else "value"
             expression = self.text(node.value)
             first = target not in self.assigned_names and isinstance(node.targets[0], ast.Name)
@@ -212,7 +218,7 @@ class _NodeFactory:
             "type": "action", "id": self.nid(), "startLine": line,
             "endLine": self.end_line(node),
             "header": self.text(node), "text": self.text(node),
-            "action": {"subtype": "expression", "raw": self.text(node), "line": line,
+            "action": {"subtype": "unsupported", "raw": self.text(node), "line": line,
                        "expressionText": self.text(node)},
         }
 
@@ -221,6 +227,10 @@ class _NodeFactory:
         params = []
         for arg in node.args.posonlyargs + node.args.args:
             params.append({"name": arg.arg, "type": "", "defaultValue": None, "raw": arg.arg})
+        if node.args.vararg or node.args.kwarg or node.args.kwonlyargs or node.decorator_list:
+            unsupported_signature = True
+        else:
+            unsupported_signature = False
         for arg in node.args.kwonlyargs:
             params.append({"name": arg.arg, "type": "", "defaultValue": None, "raw": arg.arg})
         item = {
@@ -229,6 +239,8 @@ class _NodeFactory:
             "header": f"def {node.name}({', '.join(p['name'] for p in params)})",
             "name": node.name, "params": params, "returnType": "",
             "body": body, "keyword": "def", "scopeName": node.name,
+            "defaults": [self.text(value) for value in node.args.defaults],
+            "unsupportedSignature": unsupported_signature,
         }
         item["actionCount"] = len([n for n in ast.walk(node) if isinstance(n, (ast.Assign, ast.AugAssign, ast.Expr))])
         self.functions.append(item)
@@ -350,6 +362,17 @@ class _PyRunner:
         self.global_scope: dict[str, Any] = {}
         self.trace.scopes = [self.global_scope]
         self.current_line = 1
+        self.last_top_level_return = None
+        self.function_locals = {}
+        self.local_name_stack: list[set[str]] = []
+        def collect(table):
+            for child in table.get_children():
+                if child.get_type() == "function":
+                    self.function_locals[(child.get_name(), child.get_lineno())] = {
+                        symbol.get_name() for symbol in child.get_symbols() if symbol.is_local()
+                    }
+                collect(child)
+        collect(symtable.symtable(source, "<prism>", "exec"))
 
     def run(self) -> dict[str, Any]:
         t = self.trace
@@ -358,12 +381,13 @@ class _PyRunner:
                    code=t.lines[0].strip() if t.lines else "")
         try:
             self.exec_block(self.root["body"]["children"], self.global_scope, "Global")
-            t.complete = True
             t.add_step(len(t.lines), "end", "Program ends",
                        "The program finished. The final output is shown in the terminal.",
                        code="")
+            t.complete = True
         except StopIteration:
             t.stopped_reason = "step_limit"
+            t.warnings.append(f"The trace stopped at line {self.current_line}: step limit reached.")
         except _ReturnSignal:
             t.complete = True
         except Exception as error:  # pragma: no cover - defensive boundary
@@ -376,6 +400,8 @@ class _PyRunner:
             "functionCalls": t.function_calls, "iterations": t.iterations,
             "finalVars": t.snapshot("Global"), "callStackSupported": True,
             "interpreter": "python-safe-ast",
+            "lastTopLevelReturn": self.last_top_level_return if t.complete else None,
+            "stoppedLine": self.current_line if not t.complete else None,
         }
 
     def exec_block(self, nodes: list[dict[str, Any]], scope: dict[str, Any], scope_name: str) -> None:
@@ -386,10 +412,14 @@ class _PyRunner:
         kind = node.get("type")
         self.current_line = node.get("startLine", 1)
         if kind == "function":
+            if node.get("unsupportedSignature"):
+                raise ValueError("Unsupported function signature")
+            node = dict(node)
+            node["boundDefaults"] = [self.eval(value, scope) for value in node.get("defaults", [])]
             scope[node["name"]] = ("function", node)
             return
         if kind == "class":
-            return
+            raise ValueError("Classes are not supported by the simulator")
         if kind == "if":
             value = self.eval(node["condition"], scope)
             self.trace.event("condition", self.current_line, expressionText=node["condition"], value=value)
@@ -398,16 +428,15 @@ class _PyRunner:
                                 code=node["header"], scope=scope_name, extra={"value": display(value)})
             branch = node["consequent"] if value else node.get("alternate")
             if branch:
-                self.trace.scopes.append({})
                 self.exec_block(branch["children"], scope, scope_name)
-                self.trace.scopes.pop()
             return
         if kind == "for":
             iterable = self.eval(node.get("loopHeader", "").split(" in ", 1)[-1], scope)
             if not isinstance(iterable, (list, tuple, range)):
-                self.trace.warnings.append(f"The loop on line {self.current_line} could not be iterated safely.")
-                return
+                raise ValueError("Loop value is not iterable in the supported subset")
             target = node.get("loopHeader", "").split(" in ", 1)[0].strip()
+            if not target.isidentifier():
+                raise ValueError("Unsupported loop target")
             for value in iterable:
                 self.trace.iterations += 1
                 scope[target] = value
@@ -422,10 +451,16 @@ class _PyRunner:
                     continue
                 except _BreakSignal:
                     break
+            else:
+                if node.get("alternate"):
+                    self.exec_block(node["alternate"]["children"], scope, scope_name)
             return
         if kind == "while":
             guard = 0
-            while self.eval(node.get("condition", "False"), scope) and guard < 60:
+            while self.eval(node.get("condition", "False"), scope):
+                if guard >= 60:
+                    self.current_line = node["startLine"]
+                    raise ValueError("while loop exceeded 60 iterations")
                 guard += 1
                 self.trace.iterations += 1
                 self.trace.add_step(self.current_line, "iteration", f"Loop pass {self.trace.iterations}",
@@ -437,6 +472,9 @@ class _PyRunner:
                     continue
                 except _BreakSignal:
                     break
+            else:
+                if node.get("alternate"):
+                    self.exec_block(node["alternate"]["children"], scope, scope_name)
             return
         if kind == "action":
             self.exec_action(node, scope, scope_name)
@@ -461,21 +499,30 @@ class _PyRunner:
             raise _ContinueSignal
         if subtype in {"declaration", "assignment"}:
             target = action.get("targetDisplay") or action.get("targetName")
+            if not str(target).isidentifier():
+                raise ValueError("Unsupported assignment target")
             expression = action.get("expressionText", "")
             operator = action.get("operator", "=")
             if operator != "=" and action.get("rhs"):
-                old = scope.get(str(target), 0)
-                right = self.eval(action["rhs"], scope)
-                if operator == "+=":
-                    value = old + right
-                elif operator == "-=":
-                    value = old - right
-                elif operator == "*=":
-                    value = old * right
-                elif operator == "/=":
-                    value = old / right
+                operators = {"+=": "+", "-=": "-", "*=": "*", "/=": "/"}
+                if operator not in operators:
+                    raise ValueError("Unsupported augmented assignment")
+                current = self.eval(str(target), scope)
+                if isinstance(current, list) and operator in {"+=", "*="}:
+                    right = self.eval(action['rhs'], scope)
+                    if operator == "+=" and isinstance(right, (list, tuple, range)):
+                        if len(current) + len(right) > 4096:
+                            raise ValueError("Collection exceeds 4096 items")
+                        current.extend(right)
+                    elif operator == "*=" and isinstance(right, int):
+                        if len(current) * max(right, 0) > 4096:
+                            raise ValueError("Collection exceeds 4096 items")
+                        current *= right
+                    else:
+                        raise ValueError("Unsupported list augmented assignment")
+                    value = current
                 else:
-                    value = right
+                    value = self.eval(f"{target} {operators[operator]} ({action['rhs']})", scope)
             else:
                 value = self.eval(expression, scope)
             is_decl = bool(action.get("isDeclaration"))
@@ -491,9 +538,19 @@ class _PyRunner:
                                 extra={"target": target, "value": display(value)})
             return
         if subtype == "print":
-            args = self._print_args(action.get("expressionText", ""), scope)
-            text = " ".join(display(arg) for arg in args)
-            self.trace.output += text + "\n"
+            call = ast.parse(action.get("expressionText", ""), mode="eval").body
+            args = [self._eval_node(arg, scope) for arg in call.args]
+            options = {kw.arg: self._eval_node(kw.value, scope) for kw in call.keywords}
+            if any(key not in {"sep", "end"} for key in options):
+                raise ValueError("Unsupported print option")
+            sep, end = options.get("sep"), options.get("end")
+            if sep is not None and not isinstance(sep, str) or end is not None and not isinstance(end, str):
+                raise ValueError("print sep and end must be strings or None")
+            text = (" " if sep is None else sep).join(str(arg) for arg in args)
+            addition = text + ("\n" if end is None else end)
+            if len(self.trace.output) + len(addition) > 60000:
+                raise ValueError("Output exceeds 60000 characters")
+            self.trace.output += addition
             self.trace.event("print", self.current_line, value=text)
             self.trace.add_step(self.current_line, "print", "Print output",
                                 f"Appends `{text}` to the output.", code=text_line,
@@ -502,8 +559,9 @@ class _PyRunner:
         if subtype == "call":
             self.eval(action.get("expressionText", ""), scope)
             return
-        if subtype in {"import", "comment", "empty", "pass"}:
+        if subtype in {"comment", "empty", "pass"}:
             return
+        raise ValueError(f"Unsupported statement: {text_line}")
 
     def _print_args(self, text: str, scope: dict[str, Any]) -> list[Any]:
         try:
@@ -524,13 +582,59 @@ class _PyRunner:
         return self._eval_node(tree, scope)
 
     def _eval_node(self, node: ast.AST, scope: dict[str, Any]) -> Any:
+        value = self._eval_raw(node, scope)
+        if isinstance(value, int) and value.bit_length() > 4096:
+            raise ValueError("Integer exceeds 4096 bits")
+        if isinstance(value, str) and len(value) > 60000:
+            raise ValueError("String exceeds 60000 characters")
+        if isinstance(value, (list, tuple, dict)) and len(value) > 4096:
+            raise ValueError("Collection exceeds 4096 items")
+        return value
+
+    def _eval_raw(self, node: ast.AST, scope: dict[str, Any]) -> Any:
         if isinstance(node, ast.Constant):
             return node.value
+        if isinstance(node, ast.JoinedStr):
+            parts = []
+            size = 0
+            for part in node.values:
+                value = self._eval_node(part, scope)
+                if not isinstance(value, str):
+                    raise ValueError("Invalid formatted string")
+                size += len(value)
+                if size > 60000:
+                    raise ValueError("String exceeds 60000 characters")
+                parts.append(value)
+            return "".join(parts)
+        if isinstance(node, ast.FormattedValue):
+            value = self._eval_node(node.value, scope)
+            if not isinstance(value, (str, int, float, bool, type(None))):
+                raise ValueError("Formatting this value is not supported")
+            if node.conversion == 115:
+                value = str(value)
+            elif node.conversion == 114:
+                value = repr(value)
+            elif node.conversion == 97:
+                value = ascii(value)
+            elif node.conversion != -1:
+                raise ValueError("Unsupported string conversion")
+            spec = self._eval_node(node.format_spec, scope) if node.format_spec else ""
+            if len(spec) > 128 or any(int(n) > 60000 for n in re.findall(r"\d+", spec)):
+                raise ValueError("Format specifier exceeds safe limit")
+            return format(value, spec)
         if isinstance(node, ast.Name):
             if node.id in {"True", "False", "None"}:
                 return {"True": True, "False": False, "None": None}[node.id]
-            return scope.get(node.id, 0)
+            if node.id in scope:
+                return scope[node.id]
+            if scope is not self.global_scope and self.local_name_stack and node.id in self.local_name_stack[-1]:
+                raise UnboundLocalError(f"Local variable '{node.id}' referenced before assignment")
+            if node.id in self.global_scope:
+                return self.global_scope[node.id]
+            raise NameError(f"Name '{node.id}' is not defined")
         if isinstance(node, ast.List):
+            if len(node.elts) > 4096:
+                raise ValueError("Collection exceeds 4096 items")
             return [self._eval_node(v, scope) for v in node.elts]
         if isinstance(node, ast.Tuple):
             return tuple(self._eval_node(v, scope) for v in node.elts)
@@ -539,6 +643,15 @@ class _PyRunner:
         if isinstance(node, ast.BinOp):
             left = self._eval_node(node.left, scope)
             right = self._eval_node(node.right, scope)
+            if isinstance(node.op, ast.Mult):
+                for seq, count in ((left, right), (right, left)):
+                    if isinstance(seq, (str, list, tuple)) and isinstance(count, int):
+                        limit = 60000 if isinstance(seq, str) else 4096
+                        if len(seq) * max(count, 0) > limit:
+                            raise ValueError("Repeated value exceeds safe limit")
+            if isinstance(node.op, ast.Add) and isinstance(left, (str, list, tuple)) and isinstance(right, type(left)):
+                if len(left) + len(right) > (60000 if isinstance(left, str) else 4096):
+                    raise ValueError("Combined value exceeds safe limit")
             if isinstance(node.op, ast.Add):
                 return left + right
             if isinstance(node.op, ast.Sub):
@@ -551,15 +664,46 @@ class _PyRunner:
                 return left // right
             if isinstance(node.op, ast.Mod):
                 return left % right
-            return 0
+            if isinstance(node.op, ast.Pow):
+                if isinstance(right, int) and abs(right) > 4096:
+                    raise ValueError("Exponent exceeds safe limit")
+                if isinstance(left, int) and isinstance(right, int) and right > 0 and left.bit_length() * right > 8192:
+                    raise ValueError("Power exceeds safe limit")
+                result = left ** right
+                if isinstance(result, int) and result.bit_length() > 4096:
+                    raise ValueError("Integer exceeds 4096 bits")
+                return result
+            raise ValueError("Unsupported binary operator")
         if isinstance(node, ast.UnaryOp):
             value = self._eval_node(node.operand, scope)
-            return -value if isinstance(node.op, ast.USub) else value
+            if isinstance(node.op, ast.Not):
+                return not value
+            if isinstance(node.op, ast.USub):
+                return -value
+            if isinstance(node.op, ast.UAdd):
+                return +value
+            if isinstance(node.op, ast.Invert):
+                return ~value
+            raise ValueError("Unsupported unary operator")
         if isinstance(node, ast.BoolOp):
-            values = [self._eval_node(v, scope) for v in node.values]
-            return all(values) if isinstance(node.op, ast.And) else any(values)
+            result = self._eval_node(node.values[0], scope)
+            for value in node.values[1:]:
+                if bool(result) != isinstance(node.op, ast.And):
+                    return result
+                result = self._eval_node(value, scope)
+            return result
         if isinstance(node, ast.Compare):
             left = self._eval_node(node.left, scope)
+            if len(node.ops) > 1:
+                for op, comparator in zip(node.ops, node.comparators):
+                    right = self._eval_node(comparator, scope)
+                    ops = {ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt, ast.LtE: operator.le, ast.Gt: operator.gt, ast.GtE: operator.ge, ast.In: lambda a, b: a in b, ast.NotIn: lambda a, b: a not in b}
+                    if type(op) not in ops:
+                        raise ValueError("Unsupported comparison")
+                    if not ops[type(op)](left, right):
+                        return False
+                    left = right
+                return True
             right = self._eval_node(node.comparators[0], scope)
             kind = type(node.ops[0])
             if kind is ast.Eq:
@@ -578,7 +722,7 @@ class _PyRunner:
                 return left in right
             if kind is ast.NotIn:
                 return left not in right
-            return False
+            raise ValueError("Unsupported comparison")
         if isinstance(node, ast.IfExp):
             return self._eval_node(node.body if self._eval_node(node.test, scope) else node.orelse, scope)
         if isinstance(node, ast.Call):
@@ -588,7 +732,7 @@ class _PyRunner:
                     return None
                 if name == "range":
                     values = [self._eval_node(arg, scope) for arg in node.args]
-                    return list(range(*(int(v) for v in values)))
+                    return range(*values)
                 if name == "len":
                     return len(self._eval_node(node.args[0], scope))
                 if name == "int":
@@ -597,33 +741,53 @@ class _PyRunner:
                     return float(self._eval_node(node.args[0], scope))
                 if name == "str":
                     return str(self._eval_node(node.args[0], scope))
-                if name in self.functions:
-                    item = self.functions[name]
+                if name in scope or name in self.global_scope:
+                    binding = scope.get(name, self.global_scope.get(name))
+                    if not isinstance(binding, tuple) or binding[0] != "function":
+                        raise ValueError(f"{name} is not a supported function")
+                    item = binding[1]
+                    if len(self.trace.call_stack) >= 32:
+                        raise ValueError("Call depth exceeds 32")
+                    call_line = self.current_line
                     args = [self._eval_node(arg, scope) for arg in node.args]
+                    if node.keywords:
+                        raise ValueError("Keyword function arguments are not supported")
+                    params = item["params"]
+                    defaults = item.get("boundDefaults", [])
+                    if len(args) > len(params) or len(args) < len(params) - len(defaults):
+                        raise ValueError(f"Invalid arguments for {name}")
+                    if len(args) < len(params):
+                        args += defaults[len(args) - (len(params) - len(defaults)):]
                     self.trace.function_calls += 1
                     frame: dict[str, Any] = {param["name"]: value for param, value in zip(item["params"], args)}
                     self.trace.scopes.append(frame)
                     self.trace.call_stack.append(name)
+                    self.local_name_stack.append(self.function_locals.get((item["name"], item["startLine"]), set()))
                     self.trace.add_step(node.lineno if hasattr(node, "lineno") else self.current_line,
                                         "call", f"Call {name}()", f"Enters `{name}` with {len(args)} argument(s).",
                                         scope=name)
+                    is_top_level = len(self.trace.call_stack) == 1
+                    result_value = None
                     try:
                         self.exec_block(item["body"]["children"], frame, name)
                     except _ReturnSignal as result:
-                        return result.value
+                        result_value = result.value
                     finally:
                         self.trace.call_stack.pop()
                         self.trace.scopes.pop()
-                    return None
-            return None
+                        self.local_name_stack.pop()
+                    if is_top_level:
+                        self.last_top_level_return = {"name": name, "value": display(result_value), "line": call_line}
+                    return result_value
+            raise ValueError("Unsupported function call")
         if isinstance(node, ast.Subscript):
             value = self._eval_node(node.value, scope)
             index = self._eval_node(node.slice, scope)
             try:
                 return value[index]
-            except Exception:
-                return None
-        return None
+            except Exception as error:
+                raise ValueError(f"Invalid subscript: {error}") from error
+        raise ValueError(f"Unsupported expression: {type(node).__name__}")
 
 
 def _line_metrics(source: str, tree: ast.AST, functions: int, classes: int, assignments: int, counts: dict[str, int]) -> dict[str, int]:
@@ -654,6 +818,8 @@ def _make_guide(analysis: dict[str, Any], trace: dict[str, Any]) -> dict[str, An
     metrics = analysis["metrics"]
     output = trace["output"].strip()
     output_display = f"{output} ⏎" if output else "No output"
+    if not trace["complete"]:
+        output_display = f"Partial output: {output_display} (simulation stopped)"
     summary = f"This Python program "
     if functions:
         summary += f"defines {len(functions)} helper{'s' if len(functions) != 1 else ''}, "

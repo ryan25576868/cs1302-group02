@@ -339,7 +339,7 @@ class CompareView(QGraphicsView):
         accent.setPen(QPen(Qt.PenStyle.NoPen))
         card.child(accent)
 
-        name = card.child(QGraphicsSimpleTextItem(symbol.display))
+        name = card.child(QGraphicsSimpleTextItem(symbol.label))
         name.setBrush(QColor("#e9edf2"))
         name.setFont(QFont("Cascadia Code", 8))
         name.setPos(11, 4)

@@ -460,8 +460,9 @@ class FlowchartView(QGraphicsView):
         self._fit_timer.setSingleShot(True)
         self._fit_timer.timeout.connect(self._fit_scene)
 
-    def set_analysis(self, analysis: dict) -> None:
+    def set_analysis(self, analysis: dict, trace: dict | None = None) -> None:
         self._scene.clear()
+        self._trace = trace
         self._animation_groups = []
         y = 18
         x = 18
@@ -551,8 +552,40 @@ class FlowchartView(QGraphicsView):
         previous_exit = (x + width / 2, y + 48)
         y += 68
         y = self._sequence((body or {}).get("children", []), x, y, width, previous_exit)
-        self._box(x, y, width, 44, "END", "Program finished", "#ff7852")
-        return y + 44
+        if (body or {}).get("children"):
+            previous_exit = (x + width / 2, y - 25)
+        trace = self._trace
+        messages = []
+        if trace is None:
+            messages.append("Program finished")
+        elif not trace.get("complete"):
+            messages.append(tr("Simulation incomplete"))
+            messages.append(str((trace.get("warnings") or [trace.get("stoppedReason", "")])[-1]))
+        elif not trace.get("output") and not trace.get("lastTopLevelReturn"):
+            messages.append(tr("Completed · no output"))
+        output = trace.get("output", "") if trace else ""
+        if output:
+            label = tr("Output") if trace.get("complete") else tr("Partial output")
+            lines = output.splitlines() or [output]
+            messages.append(label + ": " + lines[0])
+            if len(lines) > 1:
+                messages.append(lines[1] + (" …" if len(lines) > 2 else ""))
+        result = trace.get("lastTopLevelReturn") if trace and trace.get("complete") else None
+        if result:
+            lines = str(result["value"]).splitlines() or [""]
+            messages.append(tr("Return") + ": " + result["name"] + " → " + lines[0])
+            if len(lines) > 1:
+                messages.append(lines[1] + (" …" if len(lines) > 2 else ""))
+        height = 40 + len(messages) * 17
+        self._arrow(previous_exit, (x + width / 2, y))
+        self._box(x, y, width, height, "END", "", "#ff7852")
+        for index, message in enumerate(messages):
+            line = self._scene.addSimpleText(self._text(message, 48))
+            line.setBrush(QColor("#e9edf2"))
+            line.setFont(QFont("Cascadia Code", 9))
+            line.setPos(x + 14, y + 29 + index * 17)
+            line.setZValue(2)
+        return y + height
 
     def _sequence(self, nodes, x, y, width, previous_exit):
         for node in nodes:
@@ -565,6 +598,8 @@ class FlowchartView(QGraphicsView):
                 previous_exit = self._box(x, y, width, 48, "LOOP", node.get("header", "loop"), "#d7a84d")
                 y = previous_exit[1] + 18
                 y = self._sequence(node.get("body", {}).get("children", []), x + 34, y, width - 34, previous_exit)
+                if node.get("alternate"):
+                    y = self._sequence(node["alternate"].get("children", []), x + 34, y, width - 34, (x + width / 2, y))
                 y += 22
                 previous_exit = (x + width / 2, y)
             elif kind == "if":
@@ -656,12 +691,15 @@ class TraceView(QWidget):
         self.timer.setInterval(750)
         self.timer.timeout.connect(lambda: self.move(1))
         self.items: list[dict] = []
+        self.trace = {}
 
     def set_trace(self, trace: dict) -> None:
+        self.trace = trace
         self.timer.stop()
         self.play.setText("Play")
         self.steps.clear()
         self.items = trace.get("steps", [])
+        self.play.setEnabled(len(self.items) > 1)
         for step in self.items:
             item = QListWidgetItem(f"L{step.get('line', '?')} · {step.get('title', 'Step')}")
             self.steps.addItem(item)
@@ -686,6 +724,7 @@ class TraceView(QWidget):
             f"<p>{html.escape(step.get('detail', ''))}</p>"
             f"<h3>Variables</h3><table>{variables or '<tr><td>No variables yet.</td></tr>'}</table>"
             f"<h3>Output</h3><pre style='color:#c8d2b5'>{output}</pre>"
+            + ("<p>" + html.escape("; ".join(self.trace.get("warnings", []))) + "</p>" if not self.trace.get("complete", True) else "")
         )
         self.prev.setEnabled(index > 0)
         self.next.setEnabled(index + 1 < len(self.items))
@@ -695,12 +734,17 @@ class TraceView(QWidget):
         index = self.steps.currentRow() + delta
         if 0 <= index < len(self.items):
             self.steps.setCurrentRow(index)
+        if self.steps.currentRow() >= len(self.items) - 1:
+            self.timer.stop()
+            self.play.setText("Play")
 
     def toggle_play(self) -> None:
         if self.timer.isActive():
             self.timer.stop()
             self.play.setText("Play")
         else:
+            if self.steps.currentRow() >= len(self.items) - 1:
+                self.steps.setCurrentRow(0)
             self.timer.start()
             self.play.setText("Pause")
 
@@ -1114,6 +1158,8 @@ class ResultsPage(QWidget):
         self.tabs.setTabText(2, tr("Live Trace"))
         self.tabs.setTabText(3, tr("Data Flow"))
         self.tabs.setTabText(4, tr("Guide"))
+        if self.analysis:
+            self.flow.set_analysis(self.analysis, self.trace if self.language == "python" else None)
 
     def _tab_changed(self, index: int) -> None:
         widget = self.tabs.widget(index)
@@ -1142,7 +1188,7 @@ class ResultsPage(QWidget):
         )
         self.source_highlighter = CodeHighlighter(self.source.document(), language)
         self.source.setPlainText(self.analysis.get("source", ""))
-        self.flow.set_analysis(self.analysis)
+        self.flow.set_analysis(self.analysis, self.trace if language == "python" else None)
         self.tree.set_analysis(self.analysis)
         self.trace_view.set_trace(self.trace)
         self.data.set_analysis(self.analysis, self.trace)
