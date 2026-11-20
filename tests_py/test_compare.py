@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 
 from python_app import compare_engine
@@ -52,7 +53,7 @@ class ModelFromAnalysisTests(unittest.TestCase):
         self.assertEqual(method.kind, "method")
         self.assertEqual(method.qualname, "Shape.area")
         self.assertEqual(method.depth, 1)
-        self.assertEqual(method.display, "area()")
+        self.assertEqual(method.label, "def area")
 
     def test_ignores_nodes_that_are_not_containers(self):
         analysis = {
@@ -145,6 +146,31 @@ class AlignedRowsTests(unittest.TestCase):
     def test_deleted_lines_keep_the_other_column_empty(self):
         rows = aligned_rows(["a", "b"], ["a"], 10, 20)
         self.assertEqual(rows[-1], ("del", 11, "b", 0, ""))
+
+
+@unittest.skipIf(ENGINE_MISSING, f"structscope not importable: {ENGINE_MISSING}")
+class ComparePageTests(unittest.TestCase):
+    def test_compare_renders_and_swap_reverses_statuses(self):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtWidgets import QApplication
+        from python_app.compare import ComparePage
+
+        app = QApplication.instance() or QApplication([])
+        page = ComparePage()
+        self.addCleanup(page.close)
+        page.old_source = "def old():\n    return 1\n"
+        page.new_source = "def new():\n    return 2\n"
+        page.compare_button.click()
+        self.assertIsNotNone(page.result)
+        self.assertTrue(page.view._cards)
+        self.assertGreater(page.table.rowCount(), 0)
+        self.assertEqual({p.symbol.name: p.status.value for p in page.result.pairs},
+                         {"old": "removed", "new": "added"})
+        page.swap_button.click()
+        page.compare_button.click()
+        self.assertEqual({p.symbol.name: p.status.value for p in page.result.pairs},
+                         {"old": "added", "new": "removed"})
+        app.processEvents()
 
 
 if __name__ == "__main__":

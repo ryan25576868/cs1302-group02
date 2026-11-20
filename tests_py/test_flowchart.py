@@ -75,6 +75,16 @@ class FlowchartViewportTests(unittest.TestCase):
         self.assertNotAlmostEqual(initial_scale, view.transform().m11(), delta=0.05)
         self.assert_fitted_to_viewport(view)
 
+    def test_end_displays_output_and_partial_status(self):
+        window, stack, view = self.make_view()
+        self.addCleanup(window.close)
+        for source, expected in (("print(2 ** 3)", "Output: 8"),
+                                 ("print(1)\nprint(missing)", "Partial output: 1")):
+            result = analyze_python(source)
+            view.set_analysis(result["analysis"], result["trace"])
+            texts = [item.text() for item in view.scene().items() if hasattr(item, "text")]
+            self.assertIn(expected, texts)
+
 
 if __name__ == "__main__":
     unittest.main()
