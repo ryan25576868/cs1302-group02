@@ -999,17 +999,11 @@ class WelcomePage(QWidget):
         card_layout.addWidget(features)
         outer.addWidget(card)
         outer.addStretch(1)
-        footnote = QLabel(
-            tr("Local only · Python · JavaScript · TypeScript · Java · C++ · C")
-        )
-        footnote.setObjectName("Tiny")
-        outer.addWidget(footnote)
 
         self.card_title = card_title
         self.card_sub = card_sub
         self.language_label = language_label
         self.features = features
-        self.footnote = footnote
 
     def retranslate(self) -> None:
         self.kicker.setText(tr("LOCAL CODE WORKSPACE"))
@@ -1033,9 +1027,6 @@ class WelcomePage(QWidget):
                "LIVE TRACE   Step through the safe run\n"
                "DATA FLOW   Follow values to their use\n"
                "GUIDE   Read the explanation beside the code")
-        )
-        self.footnote.setText(
-            tr("Local only · Python · JavaScript · TypeScript · Java · C++ · C")
         )
 
     def play_intro(self) -> None:
@@ -1242,9 +1233,6 @@ class MainWindow(QMainWindow):
         self.ai_button = QPushButton(tr("Connect AI"))
         self.ai_button.setObjectName("Chip")
         top_layout.addWidget(self.ai_button)
-        self.local_label = QLabel(tr("Local · six languages"))
-        self.local_label.setObjectName("Tiny")
-        top_layout.addWidget(self.local_label)
         self.language_label = language_label
 
         container = QWidget()
@@ -1363,7 +1351,6 @@ class MainWindow(QMainWindow):
         self.activity.setText(tr("CODE WORKSPACE"))
         self.language_label.setText(tr("UI language"))
         self.ai_button.setText(tr("Connect AI"))
-        self.local_label.setText(tr("Local · six languages"))
         for widget, key in self.menus.values():
             widget.setTitle(tr(key))
         for widget, key in self.actions.values():
