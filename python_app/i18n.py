@@ -21,6 +21,10 @@ LANGUAGES = [
 _TABLES: Dict[str, Dict[str, str]] = {
     "en": {},
     "zh": {
+        "Simulation incomplete": "模拟未完成",
+        "Completed · no output": "运行完成 · 无输出",
+        "Partial output": "部分输出",
+        "Return": "返回值",
         # -- window chrome -------------------------------------------------
         "Prism — code analysis workspace": "Prism — 代码分析工作台",
         "CODE WORKSPACE": "代码工作台",

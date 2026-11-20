@@ -231,7 +231,12 @@ def compare_sources(
     old = model_from_analysis(old_analysis, old_label)
     new = model_from_analysis(new_analysis, new_label)
     pairs = match_symbols(old.symbols, new.symbols)
-    return DiffResult(old=old, new=new, pairs=pairs, language=language)
+    class PrismDiffResult(DiffResult):
+        def summary(self):
+            return {**super().summary(), "language": language}
+
+    result = PrismDiffResult(old=old, new=new, pairs=pairs)
+    return result
 
 
 def aligned_rows(
