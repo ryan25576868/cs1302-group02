@@ -42,8 +42,9 @@ prism-native = "python_app.launch_native:main"
 prism-desktop = "python_app.launch_native:main"
 
 [project.urls]
-Homepage = "https://github.com/cs1302-group02/prism"
-Repository = "https://github.com/cs1302-group02/prism"
+Homepage = "https://github.com/ryan25576868/cs1302-group02"
+Repository = "https://github.com/ryan25576868/cs1302-group02"
+
 
 [tool.hatch.build.targets.wheel]
 packages = ["python_app"]
