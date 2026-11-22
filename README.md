@@ -238,6 +238,30 @@ python -m unittest discover -s tests_py -v
 ### Optional AI settings
 
 ![Prism AI settings](screenshots/native-ai-settings.png)
+## Motivation
+
+Beginners learning programming often struggle to understand how source code translates into control flow, runtime state changes, and structural design. Existing tools—such as Python's built-in `ast` module, `difflib`, or static diagram generators—typically output raw syntax trees, line-by-line text diffs, or isolated static graphs without execution context, and rarely support consistent analysis across multiple languages. **Prism** was created to bridge this gap by offering a unified, beginner-friendly workspace that turns static code into interactive flowcharts, safe step-by-step traces, plain-language explanations, and actionable structural feedback.
+
+## Innovation
+
+Unlike single-purpose linters or cloud-dependent educational sandboxes, **Prism** combines five capabilities into one cohesive, local-first package:
+* **Multi-Language Unified Analysis**: Parses and traces Python (via standard `ast`) alongside JavaScript, TypeScript, Java, C++, and C (via `tree-sitter`) under a consistent analytical model.
+* **Bounded Safe Execution Tracing**: Simulates step-by-step variable states and control-flow paths safely without executing arbitrary or unsafe system operations.
+* **Symbol-Level Structural Diffing**: Integrates AST-aware comparison (`structscope`) to identify added, removed, modified, and renamed/moved functions and classes rather than noisy line-level diffs.
+* **Automated Complexity & Readability Advisor**: Evaluates cyclomatic complexity, nesting depth, and readability grades (`metrics_advisor`) with concrete refactoring tips and Markdown/JSON export.
+* **Headless & Desktop Flexibility**: Isolates optional desktop GUI dependencies (`PySide6`) so the core analysis engine installs and runs cleanly in both local workstations and headless environments like JupyterHub.
+
+## Team Members & Division of Work
+
+## Team Members & Division of Work
+
+| Member Name | GitHub Account | Key Contributions |
+| :--- | :--- | :--- |
+| **ZHANG Chenrui** | `ZHANGChenrui-alt` | Spearheaded the early project architecture, conceptual design, and rapid prototyping through agentic coding workflows. Transformed the initial idea into a working local-first codebase, establishing the core multi-language analysis pipeline, interactive workspace foundation, and functional prototype demos that guided subsequent team modules. |
+| **Wang Yuzhe** | `wyzzz12548` | Designed and implemented the **Compare Versions** page and structural diff engine (`compare.py` & `compare_engine.py`)[cite: 3, 4]. Built AST-based symbol-level comparison workflows that automatically detect unchanged, modified, renamed/moved, added, and removed classes and functions in a unified visual diff view rather than noisy line-by-line text diffs. |
+| **Cheng Siying** | `ChengSiying21` | Developed the **Function POV** module using Python AST analysis to safely simulate function execution without running untrusted user code. Implemented step-by-step execution visualization, real-time variable state tracking, dynamic call-stack inspection, and interactive beginner coding challenges complete with automated hints and answer verification. |
+| **YU Tonghao** | `ZenTao66` | Led end-to-end project testing, debugging, and quality assurance across core workflows. Identified and resolved critical edge cases in Python execution simulation, loop state rendering, result display formatting, and version comparison; refined UI/UX layouts for clarity and planned, recorded, and produced the final project demonstration video. |
+| **Tao Chenlin** | `ryan25576868` | Architected and configured the standard PyPI packaging specification (`pyproject.toml` with `hatchling`)[cite: 2], isolating heavy desktop GUI dependencies (`PySide6`) as optional `[gui]` extras so the core engine installs cleanly in headless environments like JupyterHub[cite: 2]. Implemented the cross-language code complexity and readability advisor (`python_app/metrics_advisor.py`) with Markdown/JSON export and verified it with automated unit tests (`tests_py/test_metrics_advisor.py`)[cite: 3, 4]. |
 
 ## License
 
