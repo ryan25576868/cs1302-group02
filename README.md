@@ -253,8 +253,6 @@ Unlike single-purpose linters or cloud-dependent educational sandboxes, **Prism*
 
 ## Team Members & Division of Work
 
-## Team Members & Division of Work
-
 | Member Name | GitHub Account | Key Contributions |
 | :--- | :--- | :--- |
 | **ZHANG Chenrui** | `ZHANGChenrui-alt` | Spearheaded the early project architecture, conceptual design, and rapid prototyping through agentic coding workflows. Transformed the initial idea into a working local-first codebase, establishing the core multi-language analysis pipeline, interactive workspace foundation, and functional prototype demos that guided subsequent team modules. |
